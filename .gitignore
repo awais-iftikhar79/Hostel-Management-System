@@ -1,0 +1,14 @@
+# Environments
+venv/
+.venv/
+env/
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+
+# Uploaded Files (we don't want to push student receipts to GitHub!)
+uploads/
