@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
+from typing import List # Make sure this is at the top of your file!
+
 
 # Cleaned up imports!
 from models.model import Account, StudentProfile, Hostel, Room, RoomAllocation, FeeRecord, Complaint, RoomChangeRequest
@@ -29,6 +31,14 @@ def create_hostel(hostel: HostelCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_hostel) # Refresh to load the newly created rooms!
     return new_hostel
+
+
+# Add this right below your create_hostel route
+@router.get("/hostels", response_model=List[HostelResponse])
+def get_all_hostels(db: Session = Depends(get_db)):
+    """Fetch all hostels to populate the dropdown menu"""
+    hostels = db.query(Hostel).all()
+    return hostels
 
 # 2. Register a Student
 @router.post("/students", response_model=AccountResponse)
@@ -118,3 +128,35 @@ def split_bill(room_id: int, total_amount: float, db: Session = Depends(get_db))
     
     db.commit()
     return {"message": f"Electricity bill of {total_amount} split among {len(active_allocations)} students. Each student charged {int(amount_per_student)}."}
+
+@router.get("/students")
+def get_all_students(db: Session = Depends(get_db)):
+    """Fetch all registered students and their current room assignments."""
+    students = db.query(StudentProfile).all()
+    result = []
+    
+    for student in students:
+        allocation = db.query(RoomAllocation).filter(
+            RoomAllocation.student_id == student.id, 
+            RoomAllocation.is_active == True
+        ).first()
+        
+        room_number = "Pending Allotment"
+        hostel_id = "none" # Default if they have no room yet
+        
+        if allocation and allocation.room:
+            room_number = allocation.room.room_number
+            hostel_id = str(allocation.room.hostel_id) # Grab the hostel ID!
+            
+        account = db.query(Account).filter(Account.id == student.account_id).first()
+        
+        result.append({
+            "id": student.id,
+            "student_id_str": f"STU-{2026}-{str(student.id).zfill(4)}",
+            "name": student.name,
+            "email": account.email if account else "No Email",
+            "assigned_room": room_number,
+            "hostel_id": hostel_id # Send this to the frontend
+        })
+        
+    return result

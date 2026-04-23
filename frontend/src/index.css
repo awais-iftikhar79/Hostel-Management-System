@@ -1,1 +1,5 @@
 @import "tailwindcss";
+@config "../tailwind.config.js"; /* This tells v4 to use your custom colors! */
+
+/* You might need to adjust the path depending on where your config file is. 
+   If it's in the same folder as src, it's "../tailwind.config.js" or "./tailwind.config.js" */
