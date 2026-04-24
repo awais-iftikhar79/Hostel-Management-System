@@ -35,6 +35,7 @@ class Hostel(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False)
     total_rooms = Column(Integer, nullable=False)
+    total_floors = Column(Integer, default=1)
     
     # Relationship to Room (one-to-many)
     rooms = relationship("Room", back_populates="hostel")
@@ -48,6 +49,7 @@ class Room(Base):
     room_number = Column(String, nullable=False)
     capacity = Column(Integer, nullable=False)
     current_occupancy = Column(Integer, default=0)
+    floor = Column(String, default="Ground Floor")
     
     # Relationship to Hostel
     hostel = relationship("Hostel", back_populates="rooms")

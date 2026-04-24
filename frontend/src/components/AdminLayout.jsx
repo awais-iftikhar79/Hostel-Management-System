@@ -10,12 +10,13 @@ export default function AdminLayout({ children }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hostelName, setHostelName] = useState('');
   const [totalRooms, setTotalRooms] = useState('');
+  const [totalFloors, setTotalFloors] = useState('1'); // NEW: Total Floors State
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Allot Room Modal state
   const [isAllotModalOpen, setIsAllotModalOpen] = useState(false);
 
-  // NEW DROPDOWN STATES
+  // DROPDOWN STATES
   const [hostels, setHostels] = useState([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
@@ -71,7 +72,8 @@ export default function AdminLayout({ children }) {
         },
         body: JSON.stringify({
           name: hostelName,
-          total_rooms: parseInt(totalRooms)
+          total_rooms: parseInt(totalRooms),
+          total_floors: parseInt(totalFloors) // NEW: Send floors to backend
         })
       });
 
@@ -79,6 +81,7 @@ export default function AdminLayout({ children }) {
         setIsModalOpen(false);
         setHostelName('');
         setTotalRooms('');
+        setTotalFloors('1');
         // Refresh the page to show the new data
         window.location.reload(); 
       } else {
@@ -152,7 +155,6 @@ export default function AdminLayout({ children }) {
           >
             <span className="material-symbols-outlined text-[#1E293B] text-[20px]">domain</span>
             <span className="font-label-md text-label-md text-[#1E293B]">
-              {/* Dynamic Title Logic */}
               {localStorage.getItem('selectedHostelId') === 'all' || !localStorage.getItem('selectedHostelId') 
                 ? 'All Hostels' 
                 : currentHostel ? currentHostel.name : 'Loading...'}
@@ -165,8 +167,6 @@ export default function AdminLayout({ children }) {
           {/* The Dropdown Menu */}
           {isDropdownOpen && (
             <div className="absolute top-12 left-0 mt-1 w-48 bg-white border border-slate-200 rounded-md shadow-lg z-50 py-1">
-              
-              {/* All Hostels Option */}
               <button
                 onClick={() => handleSelectHostel('all')}
                 className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition-colors ${
@@ -250,18 +250,34 @@ export default function AdminLayout({ children }) {
                   className="w-full px-4 py-2 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none"
                 />
               </div>
-              <div>
-                <label className="block font-label-md text-label-md text-on-surface mb-1">Total Rooms</label>
-                <input 
-                  type="number" 
-                  required
-                  min="1"
-                  max="500"
-                  value={totalRooms}
-                  onChange={(e) => setTotalRooms(e.target.value)}
-                  placeholder="e.g. 50" 
-                  className="w-full px-4 py-2 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-label-md text-label-md text-on-surface mb-1">Total Rooms</label>
+                  <input 
+                    type="number" 
+                    required
+                    min="1"
+                    max="1000"
+                    value={totalRooms}
+                    onChange={(e) => setTotalRooms(e.target.value)}
+                    placeholder="e.g. 100" 
+                    className="w-full px-4 py-2 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none"
+                  />
+                </div>
+                <div>
+                  {/* NEW: Total Floors Input */}
+                  <label className="block font-label-md text-label-md text-on-surface mb-1">Total Floors</label>
+                  <input 
+                    type="number" 
+                    required
+                    min="1"
+                    max="50"
+                    value={totalFloors}
+                    onChange={(e) => setTotalFloors(e.target.value)}
+                    placeholder="e.g. 4" 
+                    className="w-full px-4 py-2 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none"
+                  />
+                </div>
               </div>
               <div className="pt-4 flex justify-end gap-3">
                 <button 

@@ -2,189 +2,274 @@ import React, { useState, useEffect } from 'react';
 import AdminLayout from '../components/AdminLayout';
 
 export default function AdminDashboard() {
-  const [hostelData, setHostelData] = useState(null);
+  const [hostels, setHostels] = useState([]);
+  const [selectedHostel, setSelectedHostel] = useState(localStorage.getItem('selectedHostelId') || null);
+  const [roomData, setRoomData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  
+  // Floor filter state
+  const [selectedFloor, setSelectedFloor] = useState('All Floors');
 
+  // Fetch initial hostel data
   useEffect(() => {
-    const fetchHostelData = async () => {
+    const fetchHostels = async () => {
       try {
         const token = localStorage.getItem('token');
-        // Let's assume we are viewing Hostel ID 1 for now
-        const currentHostelId = localStorage.getItem('selectedHostelId') || 1;
-        const response = await fetch(`http://localhost:8000/admin/hostel-map/${currentHostelId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+        const res = await fetch('http://localhost:8000/admin/hostels', {
+          headers: { 'Authorization': `Bearer ${token}` }
         });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch hostel data');
+        if (res.ok) {
+          const data = await res.json();
+          setHostels(data);
+          if (data.length > 0 && !selectedHostel) {
+            setSelectedHostel(data[0].id);
+            localStorage.setItem('selectedHostelId', data[0].id);
+          }
         }
-
-        const data = await response.json();
-        setHostelData(data);
       } catch (err) {
-        setError(err.message);
+        console.error(err);
+      }
+    };
+    fetchHostels();
+  }, []);
+
+  // Fetch the map data for the selected hostel
+  useEffect(() => {
+    if (!selectedHostel) return;
+    
+    const fetchMap = async () => {
+      setLoading(true);
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`http://localhost:8000/admin/hostel-map/${selectedHostel}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setRoomData(data.rooms || []);
+        }
+      } catch (err) {
+        console.error(err);
       } finally {
         setLoading(false);
       }
     };
-
-    fetchHostelData();
-  }, []);
-
-  // Helper function to determine room styling based on occupancy & complaints
-  const getRoomStyle = (room) => {
-    const hasComplaint = room.complaints && room.complaints.length > 0;
+    fetchMap();
     
-    if (hasComplaint) {
-      return {
-        borderColor: 'border-red-200',
-        bgColor: 'bg-red-50/50',
-        stripeColor: 'bg-red-500',
-        iconColor: 'text-red-500',
-        badgeBg: 'bg-red-100',
-        badgeText: 'text-red-700',
-        statusText: 'text-red-600/80',
-        statusLabel: 'Issue Reported'
-      };
-    }
+    // Poll for changes from the Top Nav (in case AdminLayout updates the local storage)
+    const interval = setInterval(() => {
+        const currentId = localStorage.getItem('selectedHostelId');
+        if(currentId && currentId !== selectedHostel) {
+            setSelectedHostel(currentId);
+        }
+    }, 1000);
+    return () => clearInterval(interval);
     
-    if (room.current_occupancy === 0) {
-      return {
-        borderColor: 'border-slate-200',
-        bgColor: 'bg-white',
-        stripeColor: 'bg-slate-400',
-        iconColor: 'text-slate-400',
-        badgeBg: 'bg-slate-100',
-        badgeText: 'text-slate-600',
-        statusText: 'text-on-surface-variant',
-        statusLabel: 'Occupancy'
-      };
-    }
-    
-    if (room.current_occupancy < room.capacity) {
-      return {
-        borderColor: 'border-emerald-200',
-        bgColor: 'bg-white',
-        stripeColor: 'bg-emerald-500',
-        iconColor: 'text-emerald-500',
-        badgeBg: 'bg-slate-100',
-        badgeText: 'text-slate-600',
-        statusText: 'text-on-surface-variant',
-        statusLabel: 'Occupancy'
-      };
-    }
+  }, [selectedHostel]);
 
-    // Full capacity
-    return {
-      borderColor: 'border-amber-200',
-      bgColor: 'bg-white',
-      stripeColor: 'bg-amber-500',
-      iconColor: 'text-amber-500',
-      badgeBg: 'bg-slate-100',
-      badgeText: 'text-slate-600',
-      statusText: 'text-on-surface-variant',
-      statusLabel: 'Occupancy'
-    };
+  // Group rooms by their floor
+  const roomsByFloor = roomData.reduce((acc, room) => {
+    const floor = room.floor || 'Ground Floor';
+    if (!acc[floor]) acc[floor] = [];
+    acc[floor].push(room);
+    return acc;
+  }, {});
+
+  const selectedHostelName = hostels.find(h => String(h.id) === String(selectedHostel))?.name || "Loading...";
+
+  // Determine which floors to render based on the new dropdown
+  const floorsToRender = selectedFloor === 'All Floors' 
+    ? Object.keys(roomsByFloor).sort() 
+    : [selectedFloor].filter(f => roomsByFloor[f]);
+
+  // Delete Hostel Handler
+  const handleDeleteHostel = async () => {
+    if (!selectedHostel) return;
+    
+    const confirmDelete = window.confirm(`Are you absolutely sure you want to delete ${selectedHostelName}? This will permanently erase all its rooms and current allocations!`);
+    if (!confirmDelete) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:8000/admin/hostels/${selectedHostel}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        alert("Hostel deleted successfully!");
+        localStorage.removeItem('selectedHostelId');
+        window.location.reload(); // Refresh page to load remaining hostels
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Failed to delete hostel.");
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
-
-  if (loading) return <AdminLayout><div className="p-8">Loading dashboard data...</div></AdminLayout>;
-  if (error) return <AdminLayout><div className="p-8 text-red-500">Error: {error}</div></AdminLayout>;
-  if (!hostelData) return <AdminLayout><div className="p-8">No hostel found.</div></AdminLayout>;
 
   return (
     <AdminLayout>
-      <div className="max-w-[1440px] mx-auto p-8 space-y-8">
+      <div className="p-8 max-w-[1440px] mx-auto w-full">
         
-        {/* Page Header & Legend */}
-        <div className="flex items-center justify-between">
+        {/* Page Title & Controls Layer */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-10 gap-6">
           <div>
-            <h2 className="font-h2 text-h2 text-on-surface mb-1">Room Map: {hostelData.name}</h2>
-            <p className="font-body-md text-body-md text-on-surface-variant">Live overview of occupancy and status.</p>
+            <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-[32px] font-bold text-slate-900 tracking-tight">Room Map: {selectedHostelName}</h1>
+                <button 
+                  onClick={handleDeleteHostel}
+                  className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-md transition-colors"
+                  title="Delete this Hostel"
+                >
+                  <span className="material-symbols-outlined text-[24px]">delete</span>
+                </button>
+            </div>
+            <p className="text-[16px] text-slate-500 font-medium">Live overview of occupancy and status.</p>
           </div>
-          
-          <div className="flex items-center gap-4 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-slate-400"></div>
-              <span className="font-label-sm text-label-sm text-on-surface-variant">Empty</span>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            {/* Floor Filter Dropdown */}
+            <div className="flex items-center bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
+              <span className="material-symbols-outlined text-slate-400 mr-2 text-[20px]">layers</span>
+              <select 
+                value={selectedFloor} 
+                onChange={(e) => setSelectedFloor(e.target.value)}
+                className="bg-transparent border-none text-slate-700 font-medium text-sm focus:ring-0 cursor-pointer outline-none w-full"
+              >
+                <option value="All Floors">All Floors</option>
+                {Object.keys(roomsByFloor).sort().map(floor => (
+                  <option key={floor} value={floor}>{floor}</option>
+                ))}
+              </select>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-              <span className="font-label-sm text-label-sm text-on-surface-variant">Partial</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-              <span className="font-label-sm text-label-sm text-on-surface-variant">Full</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <span className="font-label-sm text-label-sm text-on-surface-variant">Issue</span>
+
+            {/* Status Legend */}
+            <div className="flex items-center gap-4 bg-white px-5 py-2.5 rounded-full border border-slate-200 shadow-sm text-sm font-medium text-slate-600">
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-slate-300"></span> Empty</div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-400"></span> Partial</div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-400"></span> Full</div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-500"></span> Issue</div>
             </div>
           </div>
         </div>
 
-        {/* Bento Grid Room Map */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          <div className="col-span-full mb-2">
-            <h3 className="font-h3 text-h3 text-on-surface border-b border-slate-200 pb-2">Ground Floor - All Rooms</h3>
+        {loading ? (
+          <div className="py-20 flex flex-col items-center justify-center text-slate-400 gap-3">
+             <span className="material-symbols-outlined text-4xl animate-spin">refresh</span>
+             <p className="font-medium text-lg">Loading room map...</p>
           </div>
+        ) : (
+          <div className="space-y-12">
+            {floorsToRender.map((floorName) => (
+              <div key={floorName}>
+                {/* Floor Header */}
+                <h2 className="text-xl font-bold text-slate-800 mb-6 pb-2 border-b border-slate-200 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-slate-400">layers</span>
+                  {floorName} - {selectedFloor === 'All Floors' ? 'All Rooms' : 'Filtered'}
+                </h2>
 
-          {/* Map over the rooms from the database */}
-          {hostelData.rooms.map((room) => {
-            const style = getRoomStyle(room);
-            const hasComplaint = room.complaints && room.complaints.length > 0;
-            
-            return (
-              <div key={room.id} className={`${style.bgColor} rounded-xl border ${style.borderColor} p-5 shadow-[0_1px_3px_rgba(0,0,0,0.05)] hover:shadow-[0_10px_15px_rgba(0,0,0,0.1)] hover:-translate-y-1 transition-all duration-200 cursor-pointer group relative overflow-hidden`}>
-                <div className={`absolute top-0 left-0 w-1 h-full ${style.stripeColor}`}></div>
-                
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="font-h2 text-h2 text-on-surface">{room.room_number}</span>
-                    <span className={`px-2 py-0.5 rounded-full ${style.badgeBg} ${style.badgeText} font-label-sm text-label-sm flex items-center gap-1`}>
-                      {hasComplaint && <span className="material-symbols-outlined text-[14px]">warning</span>}
-                      {hasComplaint ? 'Maintenance' : 'Standard'}
-                    </span>
-                  </div>
-                  <span className={`material-symbols-outlined ${style.iconColor}`} style={{ fontVariationSettings: "'FILL' 1" }}>
-                    {hasComplaint ? 'build' : 'meeting_room'}
-                  </span>
-                </div>
+                {/* Rooms Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {roomsByFloor[floorName].map((room) => {
+                    // Logic for Status and Issues
+                    const activeOccupants = room.allocations ? room.allocations.length : 0;
+                    const openComplaints = room.complaints ? room.complaints.filter(c => c.status !== 'Resolved') : [];
+                    const hasIssue = openComplaints.length > 0;
+                    
+                    // Thematically correct styling
+                    let cardClasses = "bg-white border-slate-200 shadow-sm";
+                    let occupancyColor = "text-emerald-600";
+                    let bedIconColor = "text-slate-400";
+                    let bedBgColor = "bg-slate-50 border-slate-100";
+                    
+                    if (hasIssue) {
+                      cardClasses = "bg-red-50/10 border-red-400 shadow-[0_0_12px_rgba(239,68,68,0.15)]";
+                      bedIconColor = "text-red-400";
+                      bedBgColor = "bg-red-50 border-red-100";
+                    } else if (activeOccupants === room.capacity) {
+                      cardClasses = "bg-white border-amber-300 shadow-sm border-l-4 border-l-amber-400";
+                      occupancyColor = "text-amber-600";
+                      bedIconColor = "text-amber-500";
+                      bedBgColor = "bg-amber-50 border-amber-100";
+                    } else if (activeOccupants > 0) {
+                      cardClasses = "bg-white border-emerald-300 shadow-sm border-l-4 border-l-emerald-400";
+                    }
 
-                <div className="flex items-end justify-between">
-                  <div>
-                    <p className={`font-body-sm text-body-sm ${style.statusText} mb-1`}>{style.statusLabel}</p>
-                    {hasComplaint ? (
-                      <p className="font-label-md text-label-md text-red-700 truncate w-32">{room.complaints[0].category}</p>
-                    ) : (
-                      <p className={`font-h3 text-h3 ${room.current_occupancy > 0 ? (room.current_occupancy === room.capacity ? 'text-amber-600' : 'text-emerald-600') : 'text-slate-500'}`}>
-                        {room.current_occupancy}/{room.capacity} <span className="font-body-sm text-body-sm font-normal">beds</span>
-                      </p>
-                    )}
-                  </div>
-                  
-                  {/* Avatars or Bed Icon */}
-                  {room.current_occupancy > 0 ? (
-                    <div className="flex -space-x-2">
-                      {[...Array(room.current_occupancy)].map((_, i) => (
-                        <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center overflow-hidden">
-                          <span className="material-symbols-outlined text-slate-400 text-sm">person</span>
+                    return (
+                      <div key={room.id} className={`rounded-xl p-6 border-2 transition-all duration-200 hover:-translate-y-1 flex flex-col justify-between min-h-[160px] ${cardClasses}`}>
+                        
+                        {/* Top Row: Room Number & Issue Badge */}
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{room.room_number}</span>
+                            <span className="px-2.5 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-bold uppercase tracking-wider rounded-full">Standard</span>
+                          </div>
+                          
+                          {/* Top Right Icon / Issue Badge */}
+                          {hasIssue ? (
+                            <div className="flex items-center gap-1 text-red-600 bg-red-100 px-2.5 py-1 rounded-md border border-red-200 shadow-sm">
+                              <span className="material-symbols-outlined text-[16px]">build</span>
+                              <span className="text-xs font-bold tracking-wide">Maintenance</span>
+                            </div>
+                          ) : (
+                            <span className="material-symbols-outlined text-slate-300">door_front</span>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center border border-slate-200 group-hover:bg-slate-100 transition-colors">
-                      <span className="material-symbols-outlined text-slate-400" style={{ fontVariationSettings: "'FILL' 1" }}>bed</span>
-                    </div>
-                  )}
+
+                        {/* Middle Row: Issue Description (If exists) */}
+                        {hasIssue && (
+                          <div className="mb-4">
+                            <p className="text-[11px] font-bold text-red-500 uppercase tracking-wider mb-0.5">Issue Reported</p>
+                            <p className="text-sm font-medium text-red-700 truncate" title={openComplaints[0].description}>
+                                {openComplaints[0].category}: {openComplaints[0].description}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Bottom Row: Occupancy & Avatars */}
+                        <div className="flex justify-between items-end mt-auto">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Occupancy</p>
+                            <p className="text-lg font-bold text-slate-800">
+                              <span className={activeOccupants > 0 && !hasIssue ? occupancyColor : "text-slate-800"}>{activeOccupants}</span>
+                              <span className="text-slate-400 font-medium">/{room.capacity} beds</span>
+                            </p>
+                          </div>
+
+                          {/* Render Avatars if occupied, else empty bed icon */}
+                          {activeOccupants > 0 ? (
+                            <div className="flex -space-x-2">
+                              {[...Array(activeOccupants)].map((_, i) => (
+                                <div key={i} className="w-9 h-9 rounded-full bg-slate-800 border-2 border-white flex items-center justify-center text-white text-xs font-bold shadow-sm relative z-10">
+                                  U
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className={`w-11 h-11 rounded-full flex items-center justify-center border ${bedBgColor}`}>
+                              <span className={`material-symbols-outlined ${bedIconColor}`}>bed</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            );
-          })}
-
-        </div>
+            ))}
+            
+            {roomData.length === 0 && (
+              <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                <span className="material-symbols-outlined text-4xl text-slate-400 mb-2">meeting_room</span>
+                <p className="text-slate-600 font-medium text-lg">No rooms found.</p>
+                <p className="text-slate-500 text-sm">Please create rooms or check your database.</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </AdminLayout>
   );

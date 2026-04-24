@@ -110,3 +110,4 @@ class ComplaintResponse(BaseModel):
 class HostelCreate(BaseModel):
     name: str
     total_rooms: int
+    total_floors: int

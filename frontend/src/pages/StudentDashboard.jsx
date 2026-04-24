@@ -1,29 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { jwtDecode } from 'jwt-decode';
+import { useNavigate } from 'react-router-dom';
 import StudentLayout from '../components/StudentLayout';
 
 export default function StudentDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // Complaint Modal States
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [category, setCategory] = useState('Electrical');
-  const [description, setDescription] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Room Exchange Modal States
-  const [isExchangeModalOpen, setIsExchangeModalOpen] = useState(false);
-  const [targetRoomId, setTargetRoomId] = useState('');
-  const [exchangeReason, setExchangeReason] = useState('');
+  const navigate = useNavigate(); // <-- This lets us navigate between pages!
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         const token = localStorage.getItem('token');
         const decoded = jwtDecode(token);
-        const email = decoded.sub; // Fastapi OAuth2 uses 'sub' for the username/email
+        const email = decoded.sub;
 
         const response = await fetch(`http://localhost:8000/student/dashboard/${email}`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -40,69 +31,6 @@ export default function StudentDashboard() {
     };
     fetchDashboardData();
   }, []);
-
-  // Handle lodging a complaint
-  const handleLodgeComplaint = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      const token = localStorage.getItem('token');
-      const email = jwtDecode(token).sub;
-      
-      const res = await fetch('http://localhost:8000/student/complaints', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ email, category, description })
-      });
-      
-      if(res.ok) {
-        setIsModalOpen(false);
-        setDescription('');
-        window.location.reload(); // Refresh to see the new complaint in Recent Activity!
-      } else {
-         const err = await res.json();
-         alert(err.detail || "Failed to lodge complaint.");
-      }
-    } catch(e) {
-      console.error(e);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Handle requesting a room exchange
-  const handleRoomExchange = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      const token = localStorage.getItem('token');
-      const email = jwtDecode(token).sub;
-      
-      const res = await fetch('http://localhost:8000/student/exchange-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ 
-          email, 
-          requested_room_id: targetRoomId, 
-          reason: exchangeReason 
-        })
-      });
-      
-      if(res.ok) {
-        setIsExchangeModalOpen(false);
-        setTargetRoomId('');
-        setExchangeReason('');
-        window.location.reload(); // Refresh to see request in Recent Activity
-      } else {
-         const err = await res.json();
-         alert(err.detail || "Failed to submit request.");
-      }
-    } catch(e) {
-      console.error(e);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   if (loading) return <StudentLayout><div className="p-8">Loading your portal...</div></StudentLayout>;
   if (error) return <StudentLayout><div className="p-8 text-error">Error: {error}</div></StudentLayout>;
@@ -169,8 +97,9 @@ export default function StudentDashboard() {
               ))}
             </div>
           </div>
-          <button disabled={data.financials.total_balance === 0} className="relative z-10 w-full py-3 bg-surface-container-lowest text-primary font-label-md rounded-lg hover:bg-surface transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
-            {data.financials.total_balance === 0 ? 'All Settled' : 'Pay Now'}
+          {/* Changed this button to navigate to payments page */}
+          <button onClick={() => navigate('/student/payments')} className="relative z-10 w-full py-3 bg-surface-container-lowest text-primary font-label-md rounded-lg hover:bg-surface transition-colors flex items-center justify-center gap-2">
+            View Payments
           </button>
         </div>
 
@@ -207,102 +136,26 @@ export default function StudentDashboard() {
         <div className="md:col-span-5 bg-surface-container-lowest rounded-xl p-8 border border-surface-container shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
           <h3 className="font-h3 text-h3 text-on-surface mb-6">Quick Actions</h3>
           <div className="grid grid-cols-2 gap-4 h-[calc(100%-48px)]">
-            <button onClick={() => setIsModalOpen(true)} className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl border border-outline-variant bg-surface-bright hover:border-secondary hover:bg-surface-container-low transition-all group text-center h-full">
+            
+            {/* Navigates directly to the maintenance page */}
+            <button onClick={() => navigate('/student/maintenance')} className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl border border-outline-variant bg-surface-bright hover:border-secondary hover:bg-surface-container-low transition-all group text-center h-full">
               <div className="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center text-on-secondary-fixed group-hover:bg-secondary group-hover:text-on-secondary transition-colors">
                 <span className="material-symbols-outlined text-[24px]">report_problem</span>
               </div>
               <span className="font-label-md text-on-surface">Lodge Complaint</span>
             </button>
-            <button onClick={() => setIsExchangeModalOpen(true)} className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl border border-outline-variant bg-surface-bright hover:border-secondary hover:bg-surface-container-low transition-all group text-center h-full">
+            
+            {/* Navigates directly to the room exchange page */}
+            <button onClick={() => navigate('/student/exchange')} className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl border border-outline-variant bg-surface-bright hover:border-secondary hover:bg-surface-container-low transition-all group text-center h-full">
               <div className="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center text-on-secondary-fixed group-hover:bg-secondary group-hover:text-on-secondary transition-colors">
                 <span className="material-symbols-outlined text-[24px]">move_up</span>
               </div>
               <span className="font-label-md text-on-surface">Request Change</span>
             </button>
+            
           </div>
         </div>
       </div>
-
-      {/* ================= MODALS ================= */}
-
-      {/* LODGE COMPLAINT MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 border border-slate-200">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="font-h2 text-on-surface">Lodge a Complaint</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-error">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <form onSubmit={handleLodgeComplaint} className="space-y-4">
-              <div>
-                <label className="block font-label-md text-on-surface mb-1">Category</label>
-                <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-4 py-2 border border-outline-variant rounded-lg bg-surface focus:ring-2 focus:ring-secondary/20 outline-none">
-                  <option value="Electrical">Electrical</option>
-                  <option value="Plumbing">Plumbing</option>
-                  <option value="Internet">Internet</option>
-                  <option value="Furniture">Furniture</option>
-                </select>
-              </div>
-              <div>
-                <label className="block font-label-md text-on-surface mb-1">Description</label>
-                <textarea required rows="3" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the issue in detail..." className="w-full px-4 py-2 border border-outline-variant rounded-lg bg-surface focus:ring-2 focus:ring-secondary/20 outline-none"></textarea>
-              </div>
-              <div className="pt-4 flex justify-end gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-on-surface-variant font-label-md hover:bg-slate-100 rounded-lg">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-error text-white font-label-md rounded-lg hover:bg-error/90 disabled:opacity-50">
-                  {isSubmitting ? 'Submitting...' : 'Submit Complaint'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ROOM EXCHANGE MODAL */}
-      {isExchangeModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 border border-slate-200">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="font-h2 text-on-surface">Request Room Exchange</h2>
-              <button onClick={() => setIsExchangeModalOpen(false)} className="text-slate-400 hover:text-error">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <form onSubmit={handleRoomExchange} className="space-y-4">
-              <div>
-                <label className="block font-label-md text-on-surface mb-1">Target Room ID</label>
-                <input 
-                  type="number" 
-                  required 
-                  value={targetRoomId}
-                  onChange={(e) => setTargetRoomId(e.target.value)}
-                  placeholder="Enter the ID of the room you want" 
-                  className="w-full px-4 py-2 border border-outline-variant rounded-lg bg-surface focus:ring-2 focus:ring-secondary/20 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block font-label-md text-on-surface mb-1">Reason for Change</label>
-                <textarea 
-                  required 
-                  rows="3" 
-                  value={exchangeReason}
-                  onChange={(e) => setExchangeReason(e.target.value)}
-                  placeholder="Why do you want to switch rooms?" 
-                  className="w-full px-4 py-2 border border-outline-variant rounded-lg bg-surface focus:ring-2 focus:ring-secondary/20 outline-none"
-                ></textarea>
-              </div>
-              <div className="pt-4 flex justify-end gap-3">
-                <button type="button" onClick={() => setIsExchangeModalOpen(false)} className="px-4 py-2 text-on-surface-variant font-label-md hover:bg-slate-100 rounded-lg">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-secondary text-white font-label-md rounded-lg hover:bg-secondary/90 disabled:opacity-50">
-                  {isSubmitting ? 'Submitting...' : 'Submit Request'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </StudentLayout>
   );
 }

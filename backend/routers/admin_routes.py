@@ -10,31 +10,69 @@ from auth.security import get_password_hash
 router = APIRouter(prefix="/admin", tags=["Admin Operations"])
 
 # 1. Create a Hostel and its Rooms
+# 1. Create a Hostel and its Rooms (With F1, F2 Naming Logic)
 @router.post("/hostels", response_model=HostelResponse)
 def create_hostel(hostel: HostelCreate, db: Session = Depends(get_db)):
     existing_hostel = db.query(Hostel).filter(Hostel.name == hostel.name).first()
     if existing_hostel:
         raise HTTPException(status_code=400, detail="Hostel with this name already exists.")
     
-    new_hostel = Hostel(name=hostel.name, total_rooms=hostel.total_rooms)
+    new_hostel = Hostel(name=hostel.name, total_rooms=hostel.total_rooms, total_floors=hostel.total_floors)
     db.add(new_hostel)
     db.commit()
     db.refresh(new_hostel)
     
-    for i in range(1, hostel.total_rooms + 1):
-        room_number = f"{new_hostel.id}{str(i).zfill(2)}"
-        new_room = Room(hostel_id=new_hostel.id, room_number=room_number, capacity=4)
-        db.add(new_room)
+    rooms_per_floor = hostel.total_rooms // hostel.total_floors
+    remainder = hostel.total_rooms % hostel.total_floors
+    
+    for floor_idx in range(hostel.total_floors):
+        # Determine Prefix and Floor Name
+        if floor_idx == 0:
+            floor_name = "Ground Floor"
+            prefix = "G"
+        else:
+            floor_name = f"{floor_idx}st Floor" if floor_idx == 1 else f"{floor_idx}nd Floor" if floor_idx == 2 else f"{floor_idx}rd Floor" if floor_idx == 3 else f"{floor_idx}th Floor"
+            prefix = f"F{floor_idx}"
+        
+        rooms_this_floor = rooms_per_floor + (1 if floor_idx < remainder else 0)
+        
+        for i in range(1, rooms_this_floor + 1):
+            room_number = f"{prefix}-{str(i).zfill(2)}" # Creates G-01, F1-01, etc.
+            new_room = Room(hostel_id=new_hostel.id, room_number=room_number, capacity=4, floor=floor_name)
+            db.add(new_room)
     
     db.commit()
     db.refresh(new_hostel)
     return new_hostel
 
-# 2. Get All Hostels (For Dropdowns)
+# 2. Get All Hostels
 @router.get("/hostels", response_model=List[HostelResponse])
 def get_all_hostels(db: Session = Depends(get_db)):
     hostels = db.query(Hostel).all()
     return hostels
+
+# --- NEW: Delete a Hostel ---
+@router.delete("/hostels/{hostel_id}")
+def delete_hostel(hostel_id: int, db: Session = Depends(get_db)):
+    hostel = db.query(Hostel).filter(Hostel.id == hostel_id).first()
+    if not hostel:
+        raise HTTPException(status_code=404, detail="Hostel not found")
+
+    # Find all rooms for this hostel
+    rooms = db.query(Room).filter(Room.hostel_id == hostel_id).all()
+    room_ids = [r.id for r in rooms]
+
+    # Clean up associated records so the database doesn't crash from foreign key constraints
+    if room_ids:
+        db.query(RoomAllocation).filter(RoomAllocation.room_id.in_(room_ids)).delete(synchronize_session=False)
+        db.query(Complaint).filter(Complaint.room_id.in_(room_ids)).delete(synchronize_session=False)
+        db.query(RoomChangeRequest).filter(RoomChangeRequest.current_room_id.in_(room_ids)).delete(synchronize_session=False)
+        db.query(RoomChangeRequest).filter(RoomChangeRequest.requested_room_id.in_(room_ids)).delete(synchronize_session=False)
+        db.query(Room).filter(Room.hostel_id == hostel_id).delete(synchronize_session=False)
+
+    db.delete(hostel)
+    db.commit()
+    return {"message": "Hostel and all associated rooms deleted successfully."}
 
 # 3. Register a Student
 @router.post("/students", response_model=AccountResponse)
@@ -110,50 +148,77 @@ def allot_room(allocation: RoomAllocationCreate, db: Session = Depends(get_db)):
         is_active=True
     )
     db.add(new_allocation)
-    
     room.current_occupancy += 1
-    
     db.commit()
     db.refresh(new_allocation)
     return new_allocation
 
-# 6. The "Hostel Map" Data
-@router.get("/hostel-map/{hostel_id}", response_model=HostelResponse)
+# 6. Get Hostel Map
+@router.get("/hostel-map/{hostel_id}")
 def get_hostel_map(hostel_id: int, db: Session = Depends(get_db)):
     hostel = db.query(Hostel).filter(Hostel.id == hostel_id).first()
     if not hostel:
         raise HTTPException(status_code=404, detail="Hostel not found.")
     
+    rooms_data = []
     for room in hostel.rooms:
-        room.allocations = db.query(RoomAllocation).filter(RoomAllocation.room_id == room.id, RoomAllocation.is_active == True).all()
-        room.complaints = db.query(Complaint).filter(Complaint.room_id == room.id, Complaint.status != 'Resolved').all()
+        # Fetch active allocations and unresolved complaints for this specific room
+        allocations = db.query(RoomAllocation).filter(RoomAllocation.room_id == room.id, RoomAllocation.is_active == True).all()
+        complaints = db.query(Complaint).filter(Complaint.room_id == room.id, Complaint.status != 'Resolved').all()
+        
+        # Manually construct the dictionary so FastAPI doesn't strip the data out
+        rooms_data.append({
+            "id": room.id,
+            "room_number": room.room_number,
+            "capacity": room.capacity,
+            "current_occupancy": len(allocations), 
+            "floor": getattr(room, "floor", "Ground Floor"),
+            "allocations": [{"id": a.id, "student_id": a.student_id} for a in allocations],
+            "complaints": [{"id": c.id, "category": c.category, "description": c.description, "status": c.status} for c in complaints]
+        })
     
-    return hostel
+    return {
+        "id": hostel.id,
+        "name": hostel.name,
+        "total_rooms": hostel.total_rooms,
+        "total_floors": getattr(hostel, "total_floors", 1),
+        "rooms": rooms_data
+    }
 
-# 7. Electricity Bill Splitter
-@router.post("/split-bill")
-def split_bill(room_id: int, total_amount: float, db: Session = Depends(get_db)):
-    room = db.query(Room).filter(Room.id == room_id).first()
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found.")
-    
-    active_allocations = db.query(RoomAllocation).filter(RoomAllocation.room_id == room_id, RoomAllocation.is_active == True).all()
-    if not active_allocations:
-        raise HTTPException(status_code=400, detail="No active allocations for this room.")
-    
-    amount_per_student = total_amount / len(active_allocations)
-    
-    for allocation in active_allocations:
-        fee_record = FeeRecord(
-            student_id=allocation.student_id, 
-            amount=int(amount_per_student), 
-            fee_type="Electricity",
-            status="Pending" 
-        )
-        db.add(fee_record)
+# 7. Dynamic Bill Generator (Rent, Mess, Electricity) - NEW!
+@router.post("/generate-bills")
+def generate_bills(data: dict, db: Session = Depends(get_db)):
+    fee_type = data.get("fee_type") 
+    total_amount = float(data.get("total_amount"))
+    room_id = data.get("room_id") 
+
+    rooms_to_bill = []
+    if room_id == "all":
+        rooms_to_bill = db.query(Room).all()
+    else:
+        room = db.query(Room).filter(Room.id == int(room_id)).first()
+        if room:
+            rooms_to_bill.append(room)
+
+    for room in rooms_to_bill:
+        # Find active members in the room
+        active_allocations = db.query(RoomAllocation).filter(RoomAllocation.room_id == room.id, RoomAllocation.is_active == True).all()
+        
+        if active_allocations:
+            # DIVIDE BILL EQUALLY AMONG MEMBERS
+            amount_per_student = total_amount / len(active_allocations)
+            
+            for alloc in active_allocations:
+                new_fee = FeeRecord(
+                    student_id=alloc.student_id, 
+                    amount=int(amount_per_student), 
+                    fee_type=fee_type,
+                    status="Pending" 
+                )
+                db.add(new_fee)
     
     db.commit()
-    return {"message": f"Electricity bill split successfully."}
+    return {"message": f"{fee_type} bills generated successfully."}
 
 # 8. Get All Complaints
 @router.get("/complaints")
@@ -165,8 +230,7 @@ def get_all_complaints(db: Session = Depends(get_db)):
         room = db.query(Room).filter(Room.id == c.room_id).first()
         initials = "U"
         if student and student.name:
-            parts = student.name.split()
-            initials = "".join([p[0].upper() for p in parts[:2]])
+            initials = "".join([p[0].upper() for p in student.name.split()[:2]])
             
         result.append({
             "id": c.id,
@@ -199,14 +263,11 @@ def get_room_exchanges(db: Session = Depends(get_db)):
     for req in exchanges:
         student = db.query(StudentProfile).filter(StudentProfile.id == req.student_id).first()
         current_room = db.query(Room).filter(Room.id == req.current_room_id).first()
-        
-        # UPDATED: Use req.requested_room_id here
         target_room = db.query(Room).filter(Room.id == req.requested_room_id).first()
         
         initials = "U"
         if student and student.name:
-            parts = student.name.split()
-            initials = "".join([p[0].upper() for p in parts[:2]])
+            initials = "".join([p[0].upper() for p in student.name.split()[:2]])
             
         result.append({
             "id": req.id,
@@ -231,38 +292,24 @@ def update_exchange_status(exchange_id: int, status_update: dict, db: Session = 
     new_status = status_update.get("status")
     exchange.status = new_status
     
-    # Automatic Room Re-allocation Logic!
     if new_status == 'Approved':
-        allocation = db.query(RoomAllocation).filter(
-            RoomAllocation.student_id == exchange.student_id, 
-            RoomAllocation.is_active == True
-        ).first()
-        
+        allocation = db.query(RoomAllocation).filter(RoomAllocation.student_id == exchange.student_id, RoomAllocation.is_active == True).first()
         if allocation:
-            # Free up old room
             old_room = db.query(Room).filter(Room.id == allocation.room_id).first()
             if old_room and old_room.current_occupancy > 0:
                 old_room.current_occupancy -= 1
-            
-            # Occupy new room
-            # UPDATED: Use exchange.requested_room_id here
             new_room = db.query(Room).filter(Room.id == exchange.requested_room_id).first()
             if new_room:
                 new_room.current_occupancy += 1
-            
-            # Update the allocation record
-            # UPDATED: Use exchange.requested_room_id here
             allocation.room_id = exchange.requested_room_id
 
     db.commit()
     return {"message": f"Status updated to {exchange.status}"}
 
-# --- NEW ROUTES FOR PAYMENTS ---
-
-# 12. Get All Payments (Fee Records)
+# 12. Get All Payments - NEW! (Now includes your receipt_image_url)
 @router.get("/payments")
 def get_all_payments(db: Session = Depends(get_db)):
-    payments = db.query(FeeRecord).all()
+    payments = db.query(FeeRecord).order_by(FeeRecord.id.desc()).all()
     result = []
     for p in payments:
         student = db.query(StudentProfile).filter(StudentProfile.id == p.student_id).first()
@@ -272,7 +319,8 @@ def get_all_payments(db: Session = Depends(get_db)):
             "student_name": student.name if student else "Unknown",
             "fee_type": p.fee_type,
             "amount": p.amount,
-            "status": p.status
+            "status": p.status,
+            "receipt_url": p.receipt_image_url  # Using your exact column name!
         })
     return result
 

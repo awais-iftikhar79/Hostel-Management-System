@@ -83,7 +83,6 @@ def get_student_dashboard(email: str, db: Session = Depends(get_db)):
         "recent_activity": activities
     }
 
-# Get All Complaints
 @router.get("/complaints/{email}")
 def get_student_complaints(email: str, db: Session = Depends(get_db)):
     account = db.query(Account).filter(Account.email == email).first()
@@ -102,7 +101,6 @@ def get_student_complaints(email: str, db: Session = Depends(get_db)):
         })
     return result
 
-# Lodge Complaint
 @router.post("/complaints")
 def submit_complaint(data: dict, db: Session = Depends(get_db)):
     account = db.query(Account).filter(Account.email == data['email']).first()
@@ -124,7 +122,6 @@ def submit_complaint(data: dict, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Success"}
 
-# --- NEW ROUTE: Get Student Exchange History ---
 @router.get("/exchanges/{email}")
 def get_student_exchanges(email: str, db: Session = Depends(get_db)):
     account = db.query(Account).filter(Account.email == email).first()
@@ -142,7 +139,6 @@ def get_student_exchanges(email: str, db: Session = Depends(get_db)):
         })
     return result
 
-# Submit Exchange
 @router.post("/exchange-request")
 def submit_room_exchange(data: dict, db: Session = Depends(get_db)):
     account = db.query(Account).filter(Account.email == data['email']).first()
@@ -168,19 +164,15 @@ def submit_room_exchange(data: dict, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Exchange request submitted successfully"}
 
-# --- NEW ROUTE: Get Student Payment History ---
 @router.get("/payments/{email}")
 def get_student_payments(email: str, db: Session = Depends(get_db)):
     account = db.query(Account).filter(Account.email == email).first()
     student = db.query(StudentProfile).filter(StudentProfile.account_id == account.id).first()
     
-    # Fetch all fee records for this student
     fees = db.query(FeeRecord).filter(FeeRecord.student_id == student.id).order_by(FeeRecord.id.desc()).all()
     
-    # Calculate outstanding balance (only Open or Pending fees)
     total_outstanding = sum(f.amount for f in fees if f.status in ["Pending", "Open", "Overdue"])
     
-    # Group pending fees for the breakdown cards
     breakdown = {
         "Electricity": sum(f.amount for f in fees if f.fee_type == "Electricity" and f.status in ["Pending", "Open"]),
         "Mess": sum(f.amount for f in fees if f.fee_type == "Mess" and f.status in ["Pending", "Open"]),
@@ -195,7 +187,7 @@ def get_student_payments(email: str, db: Session = Depends(get_db)):
             "fee_type": f.fee_type,
             "amount": f.amount,
             "status": f.status,
-            "date": "Recent" # Placeholder since we didn't add timestamps to the FeeRecord model
+            "date": "Recent" 
         })
         
     return {
@@ -203,3 +195,16 @@ def get_student_payments(email: str, db: Session = Depends(get_db)):
         "breakdown": breakdown,
         "history": history
     }
+
+# --- NEW ROUTE: Submit Payment Screenshot ---
+@router.post("/pay-bill/{fee_id}")
+def pay_bill(fee_id: int, data: dict, db: Session = Depends(get_db)):
+    fee = db.query(FeeRecord).filter(FeeRecord.id == fee_id).first()
+    if not fee:
+        raise HTTPException(status_code=404, detail="Fee record not found")
+    
+    # Using your exact column name: receipt_image_url
+    fee.receipt_image_url = data.get("receipt_url") 
+    fee.status = "Under Review" 
+    db.commit()
+    return {"message": "Payment submitted for verification"}
