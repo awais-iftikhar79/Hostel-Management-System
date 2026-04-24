@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import AllotRoomModal from './AllotRoomModal';
 
 export default function AdminLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Modal states...
+  // Add Hostel Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hostelName, setHostelName] = useState('');
   const [totalRooms, setTotalRooms] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-// NEW DROPDOWN STATES
+  // Allot Room Modal state
+  const [isAllotModalOpen, setIsAllotModalOpen] = useState(false);
+
+  // NEW DROPDOWN STATES
   const [hostels, setHostels] = useState([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
@@ -47,7 +51,6 @@ export default function AdminLayout({ children }) {
     window.location.reload(); // Quick refresh to update the dashboard data
   };
 
-  // ... (Keep handleLogout and handleCreateHostel exactly the same) ...
   const handleLogout = () => {
     localStorage.removeItem('token');
     navigate('/login');
@@ -137,7 +140,8 @@ export default function AdminLayout({ children }) {
           </button>
         </div>
       </nav>
-{/* TopAppBar */}
+
+      {/* TopAppBar */}
       <header className="fixed top-0 right-0 h-16 left-[260px] z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm flex justify-between items-center px-8 transition-transform">
         
         {/* DROPDOWN AREA */}
@@ -205,7 +209,10 @@ export default function AdminLayout({ children }) {
               + Add Hostel
           </button>
           
-          <button className="font-label-md text-label-md text-white bg-primary-container hover:bg-slate-800 px-4 py-2 rounded-md transition-colors shadow-sm">
+          <button 
+            onClick={() => setIsAllotModalOpen(true)}
+            className="font-label-md text-label-md text-white bg-primary-container hover:bg-slate-800 px-4 py-2 rounded-md transition-colors shadow-sm"
+          >
               + Allot Room
           </button>
           <div className="w-px h-6 bg-slate-200 mx-2"></div>
@@ -276,6 +283,12 @@ export default function AdminLayout({ children }) {
           </div>
         </div>
       )}
+
+      {/* --- ALLOT ROOM MODAL --- */}
+      <AllotRoomModal 
+        isOpen={isAllotModalOpen} 
+        onClose={() => setIsAllotModalOpen(false)} 
+      />
     </div>
   );
 }

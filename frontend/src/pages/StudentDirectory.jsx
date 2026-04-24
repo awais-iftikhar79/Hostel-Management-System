@@ -32,12 +32,22 @@ export default function StudentDirectory() {
     fetchStudents();
   }, []);
 
-  // Filter students based on search input
-  const filteredStudents = students.filter(student => 
-    student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    student.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    student.student_id_str.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Grab the globally selected hostel ID from the top navigation
+  const globalHostelId = localStorage.getItem('selectedHostelId') || 'all';
+
+  // Filter students based on BOTH search input AND the selected Hostel
+  const filteredStudents = students.filter(student => {
+    const matchesSearch = 
+      student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.student_id_str.toLowerCase().includes(searchTerm.toLowerCase());
+                          
+    // If 'all' is selected, show everyone. Otherwise, only show students matching the hostel_id.
+    // Ensure we convert both to strings for a safe comparison!
+    const matchesHostel = globalHostelId === 'all' || String(student.hostel_id) === String(globalHostelId);
+
+    return matchesSearch && matchesHostel;
+  });
 
   // Helper to get initials for the avatar
   const getInitials = (name) => {
@@ -54,7 +64,7 @@ export default function StudentDirectory() {
             <h2 className="font-h1 text-h1 text-on-surface mb-2 flex items-center gap-3">
               Registered Students Directory
               <span className="bg-primary-fixed text-on-primary-fixed font-label-sm text-label-sm px-2.5 py-1 rounded-full">
-                {students.length} Total
+                {filteredStudents.length} {globalHostelId === 'all' ? 'Total' : 'in this Hostel'}
               </span>
             </h2>
             <p className="font-body-md text-body-md text-on-surface-variant">
