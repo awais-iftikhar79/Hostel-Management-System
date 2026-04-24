@@ -74,7 +74,7 @@ export default function StudentLayout({ children }) {
             <span className="material-symbols-outlined text-white" style={{ fontVariationSettings: "'FILL' 1" }}>apartment</span>
           </div>
           <div>
-            <h1 className="text-[24px] font-bold tracking-tight text-white leading-tight">HostelHub</h1>
+            <h1 className="text-[24px] font-bold tracking-tight text-white leading-tight">Hostel</h1>
             <p className="text-slate-400 text-xs font-medium tracking-wide mt-0.5">RESIDENT PORTAL</p>
           </div>
         </div>

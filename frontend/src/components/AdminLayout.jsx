@@ -10,7 +10,7 @@ export default function AdminLayout({ children }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hostelName, setHostelName] = useState('');
   const [totalRooms, setTotalRooms] = useState('');
-  const [totalFloors, setTotalFloors] = useState('1'); // NEW: Total Floors State
+  const [totalFloors, setTotalFloors] = useState('1'); 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Allot Room Modal state
@@ -36,7 +36,7 @@ export default function AdminLayout({ children }) {
           const data = await response.json();
           setHostels(data);
           if (!localStorage.getItem('selectedHostelId')) {
-            localStorage.setItem('selectedHostelId', 'all'); // Set default to All Hostels
+            localStorage.setItem('selectedHostelId', 'all');
           }
         }
       } catch (error) {
@@ -49,7 +49,7 @@ export default function AdminLayout({ children }) {
   const handleSelectHostel = (hostelId) => {
     localStorage.setItem('selectedHostelId', hostelId);
     setIsDropdownOpen(false);
-    window.location.reload(); // Quick refresh to update the dashboard data
+    window.location.reload(); 
   };
 
   const handleLogout = () => {
@@ -57,7 +57,6 @@ export default function AdminLayout({ children }) {
     navigate('/login');
   };
 
-  // Function to actually create the hostel in your database
   const handleCreateHostel = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -73,7 +72,7 @@ export default function AdminLayout({ children }) {
         body: JSON.stringify({
           name: hostelName,
           total_rooms: parseInt(totalRooms),
-          total_floors: parseInt(totalFloors) // NEW: Send floors to backend
+          total_floors: parseInt(totalFloors)
         })
       });
 
@@ -82,7 +81,6 @@ export default function AdminLayout({ children }) {
         setHostelName('');
         setTotalRooms('');
         setTotalFloors('1');
-        // Refresh the page to show the new data
         window.location.reload(); 
       } else {
         alert('Failed to create hostel. Make sure the name is unique.');
@@ -102,137 +100,153 @@ export default function AdminLayout({ children }) {
   ];
 
   return (
-    <div className="bg-background text-on-background font-body-md antialiased overflow-x-hidden">
+    <div className="bg-slate-50 text-slate-900 min-h-screen font-sans antialiased overflow-x-hidden">
       
-      {/* SideNavBar */}
-      <nav className="fixed left-0 top-0 h-full w-[260px] z-40 bg-[#1E293B] border-r border-slate-700 shadow-xl flex flex-col py-6 transition-all duration-200 ease-in-out">
-        <div className="px-6 mb-8 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-primary-fixed flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-primary-container" style={{ fontVariationSettings: "'FILL' 1" }}>apartment</span>
+      {/* --- TOP APP BAR --- */}
+      <header className="fixed top-0 right-0 w-full md:w-[calc(100%-260px)] h-16 z-40 bg-white/80 backdrop-blur-lg border-b border-slate-200 shadow-sm flex items-center justify-between px-6 transition-all">
+        
+        {/* Left side: System Badge & Mobile Logo */}
+        <div className="flex items-center gap-3">
+          {/* Mobile Only Brand Logo */}
+          <div className="md:hidden flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+              <span className="material-symbols-outlined text-white text-[18px]">apartment</span>
+            </div>
+            <span className="font-bold text-[18px] text-slate-800 tracking-tight">HostelHub</span>
+            <div className="w-px h-5 bg-slate-300 mx-2"></div>
           </div>
-          <div>
-            <h1 className="font-h3 text-h3 text-white tracking-tight">DormFlow</h1>
-            <p className="font-body-sm text-body-sm text-slate-400">Hostel Management</p>
+          
+          {/* Desktop Hostel Dropdown */}
+          <div className="flex items-center gap-4 relative">
+            <button 
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              <span className="material-symbols-outlined text-slate-500 text-[18px]">domain</span>
+              <span className="font-semibold text-sm text-slate-700">
+                {localStorage.getItem('selectedHostelId') === 'all' || !localStorage.getItem('selectedHostelId') 
+                  ? 'All Hostels' 
+                  : currentHostel ? currentHostel.name : 'Loading...'}
+              </span>
+              <span className="material-symbols-outlined text-slate-500 text-[18px]">
+                {isDropdownOpen ? 'expand_less' : 'expand_more'}
+              </span>
+            </button>
+
+            {/* The Dropdown Menu */}
+            {isDropdownOpen && (
+              <div className="absolute top-10 left-0 mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg z-50 py-1">
+                <button
+                  onClick={() => handleSelectHostel('all')}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition-colors ${
+                    localStorage.getItem('selectedHostelId') === 'all' || !localStorage.getItem('selectedHostelId') 
+                      ? 'bg-slate-100 font-semibold text-blue-600' 
+                      : 'text-slate-700'
+                  }`}
+                >
+                  All Hostels
+                </button>
+                <div className="w-full h-px bg-slate-100 my-1"></div>
+                {hostels.length === 0 ? (
+                  <div className="px-4 py-2 text-sm text-slate-500">No buildings found</div>
+                ) : (
+                  hostels.map(hostel => (
+                    <button
+                      key={hostel.id}
+                      onClick={() => handleSelectHostel(hostel.id)}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition-colors ${
+                        String(localStorage.getItem('selectedHostelId')) === String(hostel.id) 
+                          ? 'bg-slate-100 font-semibold text-blue-600' 
+                          : 'text-slate-700'
+                      }`}
+                    >
+                      {hostel.name}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Right side: Action Buttons & Premium Profile Pill */}
+        <div className="flex items-center gap-3">
+          <button onClick={() => setIsModalOpen(true)} className="text-sm font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-md transition-colors shadow-sm hidden sm:block">
+            + Add Hostel
+          </button>
+          
+          <button onClick={() => setIsAllotModalOpen(true)} className="text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-md transition-colors shadow-sm hidden sm:block">
+            + Allot Room
+          </button>
+
+          <div className="flex items-center gap-3 px-2 py-1.5 bg-white border border-slate-200 rounded-full shadow-sm hover:shadow-md transition-shadow ml-2">
+            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
+              AD
+            </div>
+            <span className="text-sm font-semibold text-slate-700 hidden lg:block pr-2">Admin Portal</span>
+            <div className="w-px h-5 bg-slate-200 hidden lg:block"></div>
+            <button onClick={handleLogout} className="flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors pr-2 lg:pr-1" title="Logout">
+              <span className="material-symbols-outlined text-[20px]">logout</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* --- SIDE NAVIGATION BAR --- */}
+      <nav className="fixed left-0 top-0 h-screen w-[260px] z-50 bg-[#0F172A] text-white border-r border-slate-800 shadow-2xl flex flex-col py-6 gap-2 hidden md:flex">
         
-        <div className="flex-1 px-3 space-y-1 overflow-y-auto">
-          {navLinks.map((link) => {
+        {/* Brand Header */}
+        <div className="px-6 mb-8 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-600/20">
+            <span className="material-symbols-outlined text-white" style={{ fontVariationSettings: "'FILL' 1" }}>apartment</span>
+          </div>
+          <div>
+            <h1 className="text-[24px] font-bold tracking-tight text-white leading-tight">Hostel</h1>
+            <p className="text-slate-400 text-xs font-medium tracking-wide mt-0.5">ADMIN PORTAL</p>
+          </div>
+        </div>
+
+        {/* Navigation Links */}
+        <div className="flex-1 overflow-y-auto px-3 flex flex-col gap-1.5">
+          {navLinks.map(link => {
             const isActive = location.pathname.includes(link.path);
             return (
-              <button 
+              <a 
                 key={link.path}
                 onClick={() => navigate(link.path)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-colors ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 ${
                   isActive 
-                    ? 'text-white bg-slate-800/50 border-l-4 border-white rounded-l-none' 
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/30 border-l-4 border-transparent'
+                    ? 'text-white bg-blue-600 shadow-md shadow-blue-600/20 font-medium' 
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium'
                 }`}
               >
                 <span className="material-symbols-outlined" style={{ fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}>{link.icon}</span>
-                <span className="font-label-md text-label-md">{link.label}</span>
-              </button>
+                {link.label}
+              </a>
             );
           })}
         </div>
 
-        <div className="mt-auto px-3 pt-6 border-t border-slate-700/50 space-y-1">
-          <button className="w-full flex items-center gap-3 px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800/30 rounded-md transition-colors">
+        {/* Bottom Settings Section */}
+        <div className="mt-auto px-6 pt-6 border-t border-slate-800/50">
+          <div className="flex items-center gap-3 text-slate-400 hover:text-white transition-colors cursor-pointer">
             <span className="material-symbols-outlined text-[20px]">settings</span>
-            <span className="font-label-md text-label-md">Settings</span>
-          </button>
+            <span className="text-sm font-medium">System Settings</span>
+          </div>
         </div>
       </nav>
 
-      {/* TopAppBar */}
-      <header className="fixed top-0 right-0 h-16 left-[260px] z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm flex justify-between items-center px-8 transition-transform">
-        
-        {/* DROPDOWN AREA */}
-        <div className="flex items-center gap-4 relative">
-          <button 
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center gap-2 px-3 py-2 rounded-md bg-slate-100 hover:bg-slate-200 transition-colors border border-slate-200"
-          >
-            <span className="material-symbols-outlined text-[#1E293B] text-[20px]">domain</span>
-            <span className="font-label-md text-label-md text-[#1E293B]">
-              {localStorage.getItem('selectedHostelId') === 'all' || !localStorage.getItem('selectedHostelId') 
-                ? 'All Hostels' 
-                : currentHostel ? currentHostel.name : 'Loading...'}
-            </span>
-            <span className="material-symbols-outlined text-[#1E293B] text-[20px]">
-              {isDropdownOpen ? 'expand_less' : 'expand_more'}
-            </span>
-          </button>
-
-          {/* The Dropdown Menu */}
-          {isDropdownOpen && (
-            <div className="absolute top-12 left-0 mt-1 w-48 bg-white border border-slate-200 rounded-md shadow-lg z-50 py-1">
-              <button
-                onClick={() => handleSelectHostel('all')}
-                className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition-colors ${
-                  localStorage.getItem('selectedHostelId') === 'all' || !localStorage.getItem('selectedHostelId') 
-                    ? 'bg-slate-100 font-semibold text-primary' 
-                    : 'text-slate-700'
-                }`}
-              >
-                All Hostels
-              </button>
-              
-              <div className="w-full h-px bg-slate-100 my-1"></div>
-
-              {hostels.length === 0 ? (
-                <div className="px-4 py-2 text-sm text-slate-500">No buildings found</div>
-              ) : (
-                hostels.map(hostel => (
-                  <button
-                    key={hostel.id}
-                    onClick={() => handleSelectHostel(hostel.id)}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition-colors ${
-                      String(localStorage.getItem('selectedHostelId')) === String(hostel.id) 
-                        ? 'bg-slate-100 font-semibold text-primary' 
-                        : 'text-slate-700'
-                    }`}
-                  >
-                    {hostel.name}
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-        
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="font-label-md text-label-md text-[#1E293B] bg-white border border-slate-200 hover:bg-slate-50 px-4 py-2 rounded-md transition-colors shadow-sm"
-          >
-              + Add Hostel
-          </button>
-          
-          <button 
-            onClick={() => setIsAllotModalOpen(true)}
-            className="font-label-md text-label-md text-white bg-primary-container hover:bg-slate-800 px-4 py-2 rounded-md transition-colors shadow-sm"
-          >
-              + Allot Room
-          </button>
-          <div className="w-px h-6 bg-slate-200 mx-2"></div>
-          <button onClick={handleLogout} className="text-slate-500 hover:text-red-600 transition-colors p-2 rounded-full hover:bg-red-50" title="Logout">
-             <span className="material-symbols-outlined text-[28px]">logout</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main className="ml-[260px] pt-16 min-h-screen bg-background">
+      {/* --- MAIN PAGE CONTENT --- */}
+      <main className="md:ml-[260px] pt-[64px] min-h-screen bg-slate-50">
         {children}
       </main>
 
-      {/* --- ADD HOSTEL MODAL (POPUP) --- */}
+      {/* --- ADD HOSTEL MODAL --- */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 border border-slate-200">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="font-h2 text-h2 text-on-surface">Create New Hostel</h2>
+              <h2 className="font-bold text-xl text-slate-900 tracking-tight">Create New Hostel</h2>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <span className="material-symbols-outlined">close</span>
               </button>
@@ -240,58 +254,22 @@ export default function AdminLayout({ children }) {
             
             <form onSubmit={handleCreateHostel} className="space-y-4">
               <div>
-                <label className="block font-label-md text-label-md text-on-surface mb-1">Hostel Name</label>
-                <input 
-                  type="text" 
-                  required
-                  value={hostelName}
-                  onChange={(e) => setHostelName(e.target.value)}
-                  placeholder="e.g. North Campus Hostel" 
-                  className="w-full px-4 py-2 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none"
-                />
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Hostel Name</label>
+                <input type="text" required value={hostelName} onChange={(e) => setHostelName(e.target.value)} placeholder="e.g. North Campus Hostel" className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-label-md text-label-md text-on-surface mb-1">Total Rooms</label>
-                  <input 
-                    type="number" 
-                    required
-                    min="1"
-                    max="1000"
-                    value={totalRooms}
-                    onChange={(e) => setTotalRooms(e.target.value)}
-                    placeholder="e.g. 100" 
-                    className="w-full px-4 py-2 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none"
-                  />
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Total Rooms</label>
+                  <input type="number" required min="1" max="1000" value={totalRooms} onChange={(e) => setTotalRooms(e.target.value)} placeholder="e.g. 100" className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
                 </div>
                 <div>
-                  {/* NEW: Total Floors Input */}
-                  <label className="block font-label-md text-label-md text-on-surface mb-1">Total Floors</label>
-                  <input 
-                    type="number" 
-                    required
-                    min="1"
-                    max="50"
-                    value={totalFloors}
-                    onChange={(e) => setTotalFloors(e.target.value)}
-                    placeholder="e.g. 4" 
-                    className="w-full px-4 py-2 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none"
-                  />
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Total Floors</label>
+                  <input type="number" required min="1" max="50" value={totalFloors} onChange={(e) => setTotalFloors(e.target.value)} placeholder="e.g. 4" className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
                 </div>
               </div>
               <div className="pt-4 flex justify-end gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-on-surface-variant font-label-md hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className="px-4 py-2 bg-primary text-white font-label-md rounded-lg hover:bg-primary-container transition-colors disabled:opacity-50"
-                >
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 text-sm font-medium hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
+                <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
                   {isSubmitting ? 'Creating...' : 'Create Hostel'}
                 </button>
               </div>
@@ -301,10 +279,7 @@ export default function AdminLayout({ children }) {
       )}
 
       {/* --- ALLOT ROOM MODAL --- */}
-      <AllotRoomModal 
-        isOpen={isAllotModalOpen} 
-        onClose={() => setIsAllotModalOpen(false)} 
-      />
+      <AllotRoomModal isOpen={isAllotModalOpen} onClose={() => setIsAllotModalOpen(false)} />
     </div>
   );
 }
