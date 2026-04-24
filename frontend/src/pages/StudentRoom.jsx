@@ -39,10 +39,15 @@ export default function StudentRoom() {
 
   return (
     <StudentLayout>
-      <header className="mb-10">
-        <h1 className="font-h1 text-h1 text-on-background mb-2">My Room Details</h1>
-        <p className="font-body-lg text-body-lg text-on-surface-variant">View your current accommodation and roommate information.</p>
-      </header>
+      {/* --- UPDATED HEADER WITH NEW TYPOGRAPHY --- */}
+      <div className="mb-8">
+        <h1 className="text-[32px] font-bold text-slate-900 tracking-tight mb-2">
+          My Room Details
+        </h1>
+        <p className="text-[16px] text-slate-500 font-medium">
+          View your current accommodation and roommate information.
+        </p>
+      </div>
 
       {/* Check if student actually has a room assigned */}
       {!data.room ? (
@@ -82,9 +87,13 @@ export default function StudentRoom() {
                     <span className="material-symbols-outlined text-secondary">layers</span>
                     <span className="font-label-md text-label-md">Standard Level</span>
                   </div>
+                  
+                  {/* --- DYNAMIC OCCUPANCY BADGE --- */}
                   <div className="bg-surface-container-low px-4 py-3 rounded-lg flex items-center gap-3 border border-outline-variant/50">
                     <span className="material-symbols-outlined text-secondary">group</span>
-                    <span className="font-label-md text-label-md">Shared Capacity</span>
+                    <span className="font-label-md text-label-md font-medium text-slate-800">
+                      {data.room.roommates.length + 1} / {data.room.capacity || 4} Beds Filled
+                    </span>
                   </div>
                 </div>
               </div>

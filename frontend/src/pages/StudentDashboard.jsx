@@ -37,10 +37,14 @@ export default function StudentDashboard() {
 
   return (
     <StudentLayout>
-      {/* Header Section */}
+      {/* --- UPDATED HEADER WITH NEW TYPOGRAPHY --- */}
       <div className="mb-8">
-        <h2 className="font-h1 text-h1 text-on-surface">Good morning, {data.student_name.split(' ')[0]}</h2>
-        <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">Here is your hostel overview.</p>
+        <h1 className="text-[32px] font-bold text-slate-900 tracking-tight mb-2">
+          Good morning, <span className="text-blue-600">{data.student_name.split(' ')[0]}</span>
+        </h1>
+        <p className="text-[16px] text-slate-500 font-medium">
+          Here is your hostel overview.
+        </p>
       </div>
 
       {/* Bento Grid Layout */}

@@ -12,6 +12,9 @@ export default function StudentMaintenance() {
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // NEW: Filter State
+  const [statusFilter, setStatusFilter] = useState('All');
+
   // Fetch full complaint history
   const fetchComplaints = async () => {
     try {
@@ -83,37 +86,55 @@ export default function StudentMaintenance() {
     const s = status === 'Open' ? 'Pending' : status;
     if (s === 'Pending') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-error-container text-on-error-container font-label-sm text-label-sm">
-          <span className="w-1.5 h-1.5 rounded-full bg-error"></span> Pending
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-label-sm text-label-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> Pending
         </span>
       );
     }
     if (s === 'Resolved' || s === 'Approved') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#E6F4EA] text-[#137333] border border-[#CEEAD6] font-label-sm text-label-sm">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#137333]"></span> Resolved
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-label-sm text-label-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Resolved
         </span>
       );
     }
     if (s === 'In Progress') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-label-sm text-label-sm">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-label-sm text-label-sm">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> In Progress
         </span>
       );
     }
+    if (s === 'Rejected') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 font-label-sm text-label-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-600"></span> Rejected
+        </span>
+      );
+    }
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-label-sm text-label-sm">
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-label-sm text-label-sm">
         <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span> {s}
       </span>
     );
   };
 
+  // Filter complaints logic
+  const filteredComplaints = complaints.filter(ticket => {
+    const s = ticket.status === 'Open' ? 'Pending' : ticket.status;
+    return statusFilter === 'All' || s === statusFilter;
+  });
+
   return (
     <StudentLayout>
+      {/* --- UPDATED HEADER WITH NEW TYPOGRAPHY --- */}
       <div className="mb-8">
-        <h1 className="font-h1 text-h1 text-on-background mb-2">My Complaints</h1>
-        <p className="font-body-lg text-body-lg text-on-surface-variant">Report issues and track your maintenance requests.</p>
+        <h1 className="text-[32px] font-bold text-slate-900 tracking-tight mb-2">
+          My Complaints
+        </h1>
+        <p className="text-[16px] text-slate-500 font-medium">
+          Report issues and track your maintenance requests.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -121,7 +142,7 @@ export default function StudentMaintenance() {
         {/* Left Card: Lodge a New Complaint */}
         <div className="lg:col-span-4 bg-surface-container-lowest rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-6">
           <div className="mb-6 flex items-center gap-3 border-b border-outline-variant/20 pb-4">
-            <div className="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-primary">
+            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-primary">
               <span className="material-symbols-outlined">add_task</span>
             </div>
             <h2 className="font-h3 text-h3 text-on-surface">Lodge a New Complaint</h2>
@@ -178,7 +199,7 @@ export default function StudentMaintenance() {
             <button 
               type="submit" 
               disabled={isSubmitting}
-              className="w-full bg-primary hover:bg-primary/90 text-on-primary font-label-md text-label-md py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
             >
               <span className="material-symbols-outlined text-[18px]">send</span>
               {isSubmitting ? 'Submitting...' : 'Submit Complaint'}
@@ -188,11 +209,24 @@ export default function StudentMaintenance() {
 
         {/* Right Card: My Complaint History */}
         <div className="lg:col-span-8 bg-surface-container-lowest rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-outline-variant/30 overflow-hidden">
-          <div className="p-6 border-b border-outline-variant/20 flex items-center justify-between bg-surface-container-lowest">
+          <div className="p-6 border-b border-outline-variant/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-50/50">
             <h2 className="font-h3 text-h3 text-on-surface">My Complaint History</h2>
-            <button className="text-primary hover:bg-surface-container-low px-3 py-1.5 rounded-lg font-label-sm text-label-sm transition-colors flex items-center gap-1">
-              <span className="material-symbols-outlined text-[16px]">filter_list</span> Filter
-            </button>
+            
+            {/* NEW: Filter Dropdown */}
+            <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md px-2 py-1 shadow-sm">
+              <span className="material-symbols-outlined text-[18px] text-slate-400">filter_list</span>
+              <select 
+                value={statusFilter} 
+                onChange={(e) => setStatusFilter(e.target.value)} 
+                className="bg-transparent border-none text-sm outline-none cursor-pointer pr-4 focus:ring-0 py-1 text-slate-700 font-medium"
+              >
+                <option value="All">All Statuses</option>
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Resolved">Resolved</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
           </div>
           
           <div className="overflow-x-auto">
@@ -211,11 +245,11 @@ export default function StudentMaintenance() {
                   <tr><td colSpan="4" className="py-8 text-center text-on-surface-variant">Loading history...</td></tr>
                 )}
                 
-                {!loading && complaints.length === 0 && (
-                  <tr><td colSpan="4" className="py-8 text-center text-on-surface-variant">No complaints found.</td></tr>
+                {!loading && filteredComplaints.length === 0 && (
+                  <tr><td colSpan="4" className="py-8 text-center text-on-surface-variant">No matching complaints found.</td></tr>
                 )}
 
-                {complaints.map((ticket) => (
+                {filteredComplaints.map((ticket) => (
                   <tr key={ticket.id} className="hover:bg-surface-container-lowest/50 transition-colors">
                     <td className="py-4 px-6 font-body-sm text-body-sm text-outline font-mono">
                         {ticket.ticket_id.replace('TK-', 'CMP-')}

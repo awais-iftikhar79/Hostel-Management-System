@@ -11,6 +11,9 @@ export default function StudentExchange() {
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // NEW: Filter State
+  const [statusFilter, setStatusFilter] = useState('All');
+
   // Fetch full exchange history
   const fetchExchanges = async () => {
     try {
@@ -77,37 +80,48 @@ export default function StudentExchange() {
     const s = status === 'Open' ? 'Pending' : status;
     if (s === 'Pending') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-100 text-orange-800 font-label-sm text-label-sm">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-label-sm text-label-sm">
           <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> Pending Review
         </span>
       );
     }
     if (s === 'Approved') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-label-sm text-label-sm">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Approved
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-label-sm text-label-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Approved
         </span>
       );
     }
     if (s === 'Rejected') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-100 text-red-800 font-label-sm text-label-sm">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Rejected
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 font-label-sm text-label-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-600"></span> Rejected
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-label-sm text-label-sm">
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-label-sm text-label-sm">
         <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span> {s}
       </span>
     );
   };
 
+  // NEW: Filter logic
+  const filteredExchanges = exchanges.filter(exchange => {
+    const s = exchange.status === 'Open' ? 'Pending' : exchange.status;
+    return statusFilter === 'All' || s === statusFilter;
+  });
+
   return (
     <StudentLayout>
+      {/* --- UPDATED HEADER WITH NEW TYPOGRAPHY --- */}
       <div className="mb-8">
-        <h2 className="font-h1 text-h1 text-on-surface mb-2">Room Exchange</h2>
-        <p className="font-body-lg text-body-lg text-on-surface-variant">Request a relocation or track your pending exchange requests.</p>
+        <h1 className="text-[32px] font-bold text-slate-900 tracking-tight mb-2">
+          Room Exchange
+        </h1>
+        <p className="text-[16px] text-slate-500 font-medium">
+          Request a relocation or track your pending exchange requests.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
@@ -151,10 +165,10 @@ export default function StudentExchange() {
                 <button 
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full bg-primary text-on-primary font-label-md text-label-md py-3 px-6 rounded-lg shadow-sm hover:bg-primary/90 hover:shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 px-4 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  <span>{isSubmitting ? 'Submitting...' : 'Submit Request'}</span>
                   <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>send</span>
+                  <span>{isSubmitting ? 'Submitting...' : 'Submit Request'}</span>
                 </button>
               </div>
             </form>
@@ -173,11 +187,24 @@ export default function StudentExchange() {
         {/* Right Section: Past Requests Table */}
         <div className="lg:col-span-7 flex flex-col gap-6">
           <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col h-full">
-            <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center bg-surface-bright">
+            
+            {/* NEW: Filter Header */}
+            <div className="p-6 border-b border-outline-variant/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-50/50">
               <h3 className="font-h3 text-h3 text-on-surface">Past Exchange Requests</h3>
-              <button className="text-secondary font-label-sm text-label-sm flex items-center gap-1 hover:bg-secondary-fixed/20 px-3 py-1.5 rounded-md transition-colors">
-                <span className="material-symbols-outlined text-sm">filter_list</span> Filter
-              </button>
+              
+              <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md px-2 py-1 shadow-sm">
+                <span className="material-symbols-outlined text-[18px] text-slate-400">filter_list</span>
+                <select 
+                  value={statusFilter} 
+                  onChange={(e) => setStatusFilter(e.target.value)} 
+                  className="bg-transparent border-none text-sm outline-none cursor-pointer pr-4 focus:ring-0 py-1 text-slate-700 font-medium"
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
+              </div>
             </div>
             
             <div className="overflow-x-auto">
@@ -195,11 +222,11 @@ export default function StudentExchange() {
                     <tr><td colSpan="3" className="py-8 text-center text-on-surface-variant">Loading requests...</td></tr>
                   )}
                   
-                  {!loading && exchanges.length === 0 && (
-                    <tr><td colSpan="3" className="py-8 text-center text-on-surface-variant">No exchange requests found.</td></tr>
+                  {!loading && filteredExchanges.length === 0 && (
+                    <tr><td colSpan="3" className="py-8 text-center text-on-surface-variant">No matching exchange requests found.</td></tr>
                   )}
 
-                  {exchanges.map((exchange) => (
+                  {filteredExchanges.map((exchange) => (
                     <tr key={exchange.id} className="hover:bg-surface-bright transition-colors group cursor-default">
                       <td className="py-4 px-6 text-on-surface font-mono">REQ-{String(exchange.id).padStart(4, '0')}</td>
                       <td className="py-4 px-6 text-on-surface font-medium">Room ID: {exchange.target_room}</td>

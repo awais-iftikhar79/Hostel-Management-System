@@ -10,6 +10,10 @@ export default function StudentPayments() {
   // Modal State for uploading screenshot
   const [selectedFeeId, setSelectedFeeId] = useState(null);
 
+  // NEW: Filter States for the table
+  const [feeTypeFilter, setFeeTypeFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
+
   useEffect(() => {
     const fetchPayments = async () => {
       try {
@@ -61,9 +65,16 @@ export default function StudentPayments() {
     reader.readAsDataURL(file);
   };
 
+  // Helper to normalize status for the UI badges
+  const getNormalizedStatus = (status) => {
+    if (status === 'Open' || status === 'Pending') return 'Pending';
+    if (status === 'Paid' || status === 'Approved') return 'Verified';
+    return status;
+  };
+
   const getStatusBadge = (status) => {
-    const s = status === 'Open' ? 'Pending' : status;
-    if (s === 'Paid' || s === 'Approved') return <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">Verified</span>;
+    const s = getNormalizedStatus(status);
+    if (s === 'Verified') return <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Verified</span>;
     if (s === 'Pending') return <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">Pending</span>;
     if (s === 'Under Review') return <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">Under Review</span>;
     if (s === 'Rejected') return <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">Rejected</span>;
@@ -74,14 +85,29 @@ export default function StudentPayments() {
   if (loading) return <StudentLayout><div className="p-8">Loading financial records...</div></StudentLayout>;
   if (error) return <StudentLayout><div className="p-8 text-error">Error: {error}</div></StudentLayout>;
 
+  // Apply filters to the payment history
+  const filteredHistory = paymentData.history.filter(record => {
+    const recordStatus = getNormalizedStatus(record.status);
+    const matchesFeeType = feeTypeFilter === 'All' || record.fee_type === feeTypeFilter;
+    const matchesStatus = statusFilter === 'All' || recordStatus === statusFilter;
+    return matchesFeeType && matchesStatus;
+  });
+
   return (
     <StudentLayout>
-      <header className="mb-8">
-        <h1 className="font-h1 text-h1 text-primary">Fee &amp; Payments</h1>
-        <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">Manage your hostel dues and upload payment screenshots.</p>
-      </header>
+      
+      {/* --- UPDATED HEADER WITH NEW TYPOGRAPHY --- */}
+      <div className="mb-8">
+        <h1 className="text-[32px] font-bold text-slate-900 tracking-tight mb-2">
+          Fee &amp; Payments
+        </h1>
+        <p className="text-[16px] text-slate-500 font-medium">
+          Manage your hostel dues and upload payment screenshots.
+        </p>
+      </div>
 
       <div className="grid grid-cols-12 gap-6">
+        {/* Outstanding Balance Banner */}
         <section className="col-span-12">
           <div className="bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm flex flex-col md:flex-row">
             <div className="bg-primary p-8 md:w-1/3 flex flex-col justify-center items-start">
@@ -119,10 +145,46 @@ export default function StudentPayments() {
           </div>
         </section>
 
+        {/* Payment History Table */}
         <section className="col-span-12">
           <div className="bg-white border border-outline-variant rounded-xl shadow-sm overflow-hidden">
-            <div className="px-8 py-6 border-b border-outline-variant flex justify-between items-center">
+            
+            {/* NEW: Filter Header */}
+            <div className="px-8 py-6 border-b border-outline-variant flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50/50">
               <h2 className="font-h3 text-h3 text-primary">Payment History & Pending Bills</h2>
+              
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Fee Type Dropdown */}
+                <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md px-2 py-1 shadow-sm">
+                  <span className="material-symbols-outlined text-[18px] text-slate-400">category</span>
+                  <select 
+                    value={feeTypeFilter} 
+                    onChange={(e) => setFeeTypeFilter(e.target.value)} 
+                    className="bg-transparent border-none text-sm outline-none cursor-pointer pr-4 focus:ring-0 py-1 text-slate-700 font-medium"
+                  >
+                    <option value="All">All Fee Types</option>
+                    <option value="Rent">Rent</option>
+                    <option value="Mess">Mess</option>
+                    <option value="Electricity">Electricity</option>
+                  </select>
+                </div>
+
+                {/* Status Dropdown */}
+                <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md px-2 py-1 shadow-sm">
+                  <span className="material-symbols-outlined text-[18px] text-slate-400">filter_list</span>
+                  <select 
+                    value={statusFilter} 
+                    onChange={(e) => setStatusFilter(e.target.value)} 
+                    className="bg-transparent border-none text-sm outline-none cursor-pointer pr-4 focus:ring-0 py-1 text-slate-700 font-medium"
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Under Review">Under Review</option>
+                    <option value="Verified">Verified</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </div>
+              </div>
             </div>
             
             <div className="overflow-x-auto">
@@ -137,10 +199,10 @@ export default function StudentPayments() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/50">
-                  {paymentData.history.length === 0 ? (
-                    <tr><td colSpan="5" className="px-8 py-8 text-center text-on-surface-variant">No payment records found.</td></tr>
+                  {filteredHistory.length === 0 ? (
+                    <tr><td colSpan="5" className="px-8 py-8 text-center text-on-surface-variant">No matching payment records found.</td></tr>
                   ) : (
-                    paymentData.history.map((record) => (
+                    filteredHistory.map((record) => (
                       <tr key={record.id} className="hover:bg-surface/50 transition-colors group">
                         <td className="px-8 py-4 font-label-md text-primary font-mono">{record.invoice_id}</td>
                         <td className="px-8 py-4 font-body-md"><div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-secondary"></span>{record.fee_type}</div></td>
@@ -148,10 +210,10 @@ export default function StudentPayments() {
                         <td className="px-8 py-4 text-center">{getStatusBadge(record.status)}</td>
                         <td className="px-8 py-4 text-right">
                             {/* UPLOAD SCREENSHOT LOGIC */}
-                            {(record.status === 'Pending' || record.status === 'Rejected') ? (
+                            {(record.status === 'Pending' || record.status === 'Open' || record.status === 'Rejected') ? (
                                 <button 
                                     onClick={() => setSelectedFeeId(record.id)} 
-                                    className="px-3 py-1.5 bg-secondary text-white rounded font-label-sm hover:bg-secondary/90 transition-colors flex items-center justify-end gap-1 ml-auto"
+                                    className="px-3 py-1.5 bg-secondary text-white rounded font-label-sm hover:bg-secondary/90 transition-colors flex items-center justify-end gap-1 ml-auto shadow-sm"
                                 >
                                     <span className="material-symbols-outlined text-[16px]">upload</span> Pay Now
                                 </button>
@@ -191,9 +253,9 @@ export default function StudentPayments() {
                     className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-secondary/10 file:text-secondary hover:file:bg-secondary/20 cursor-pointer" 
                 />
               </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setSelectedFeeId(null)} className="px-4 py-2 text-slate-600 bg-slate-100 rounded-lg text-sm font-medium hover:bg-slate-200">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-secondary text-white rounded-lg text-sm font-medium hover:bg-secondary/90 flex items-center gap-1">
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button type="button" onClick={() => setSelectedFeeId(null)} className="px-4 py-2 text-slate-600 bg-slate-100 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-secondary text-white rounded-lg text-sm font-medium hover:bg-secondary/90 flex items-center gap-1 shadow-sm transition-colors">
                     Submit for Verification
                 </button>
               </div>
