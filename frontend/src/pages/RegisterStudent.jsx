@@ -30,9 +30,6 @@ export default function RegisterStudent() {
     try {
       const token = localStorage.getItem('token');
       
-      // Note: Based on your backend AccountCreate schema, it expects email, password, and role.
-      // Your backend currently auto-generates the profile name from the email prefix, 
-      // but keeping First/Last name in the UI is great for future backend updates!
       const response = await fetch('http://localhost:8000/admin/students', {
         method: 'POST',
         headers: {
@@ -72,10 +69,12 @@ export default function RegisterStudent() {
     <AdminLayout>
       <div className="max-w-[800px] mx-auto p-8">
         
-        {/* Page Header */}
+        {/* --- UPDATED HEADER WITH NEW TYPOGRAPHY --- */}
         <div className="mb-8">
-          <h2 className="font-h2 text-h2 text-on-surface mb-2">Register Student</h2>
-          <p className="font-body-md text-body-md text-on-surface-variant">
+          <h1 className="text-[32px] font-bold text-slate-900 tracking-tight mb-2">
+            Register Student
+          </h1>
+          <p className="text-[16px] text-slate-500 font-medium">
             Create a new student profile and generate initial access credentials.
           </p>
         </div>

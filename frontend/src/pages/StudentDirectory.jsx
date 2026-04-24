@@ -43,7 +43,6 @@ export default function StudentDirectory() {
       student.student_id_str.toLowerCase().includes(searchTerm.toLowerCase());
                           
     // If 'all' is selected, show everyone. Otherwise, only show students matching the hostel_id.
-    // Ensure we convert both to strings for a safe comparison!
     const matchesHostel = globalHostelId === 'all' || String(student.hostel_id) === String(globalHostelId);
 
     return matchesSearch && matchesHostel;
@@ -54,26 +53,80 @@ export default function StudentDirectory() {
     return name.substring(0, 2).toUpperCase();
   };
 
+ // Update Student Function
+  const handleEditStudent = async (studentId) => {
+    const newName = window.prompt("Enter the new name for this student:");
+    if (!newName) return; // Exit if the admin cancelled or left it blank
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:8000/admin/students/${studentId}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ name: newName })
+      });
+      
+      if (res.ok) {
+        alert("Student updated successfully!");
+        window.location.reload(); // Refresh the table
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Failed to update student.");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Delete Student Function
+  const handleDeleteStudent = async (studentId) => {
+    // Show a strict warning since this deletes everything
+    const confirmDelete = window.confirm("Are you sure you want to completely remove this student? This will permanently delete their fee records, complaints, and room allocations. This cannot be undone.");
+    if (!confirmDelete) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:8000/admin/students/${studentId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        alert("Student completely deleted from the system!");
+        window.location.reload(); // Refresh the table
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Failed to delete student.");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
   return (
     <AdminLayout>
       <div className="p-8 max-w-[1440px] mx-auto w-full overflow-x-hidden">
         
-        {/* Header */}
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div>
-            <h2 className="font-h1 text-h1 text-on-surface mb-2 flex items-center gap-3">
+        {/* --- HEADER WITH NEW TYPOGRAPHY --- */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-[32px] font-bold text-slate-900 tracking-tight">
               Registered Students Directory
-              <span className="bg-primary-fixed text-on-primary-fixed font-label-sm text-label-sm px-2.5 py-1 rounded-full">
-                {filteredStudents.length} {globalHostelId === 'all' ? 'Total' : 'in this Hostel'}
-              </span>
-            </h2>
-            <p className="font-body-md text-body-md text-on-surface-variant">
-              Manage and view all students currently assigned to or awaiting room allotment in the Hostel Management System.
-            </p>
+            </h1>
+            
+            {/* The blue badge styling */}
+            <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
+              {filteredStudents.length} {globalHostelId === 'all' ? 'Total' : 'in this Hostel'}
+            </span>
           </div>
+          <p className="text-[16px] text-slate-500 font-medium">
+            Manage and view all students currently assigned to or awaiting room allotment in the Hostel Management System.
+          </p>
         </div>
 
-        {/* Filter & Search Bar */}
+        {/* Filter & Search Bar (Export Button Removed) */}
         <div className="bg-white/95 backdrop-blur-md border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.05)] rounded-xl p-4 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
           <div className="relative w-full md:w-96">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
@@ -84,12 +137,6 @@ export default function StudentDirectory() {
               placeholder="Search by student name, ID, or email..." 
               className="w-full pl-10 pr-4 py-2.5 bg-surface rounded-lg border border-outline-variant focus:border-secondary focus:ring-1 focus:ring-secondary outline-none font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/50 transition-all" 
             />
-          </div>
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <button className="px-4 py-2.5 border border-outline-variant rounded-lg text-on-surface hover:bg-surface-variant transition-colors flex items-center gap-2">
-              <span className="material-symbols-outlined">file_download</span>
-              Export List
-            </button>
           </div>
         </div>
 
@@ -104,7 +151,7 @@ export default function StudentDirectory() {
                   <th className="py-4 px-6 font-label-md text-label-md text-on-surface font-semibold">Student ID</th>
                   <th className="py-4 px-6 font-label-md text-label-md text-on-surface font-semibold">Email Address</th>
                   <th className="py-4 px-6 font-label-md text-label-md text-on-surface font-semibold">Assigned Room</th>
-                  <th className="py-4 px-6 font-label-md text-label-md text-on-surface font-semibold text-right">Action</th>
+                  <th className="py-4 px-6 font-label-md text-label-md text-on-surface font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant">
@@ -142,9 +189,21 @@ export default function StudentDirectory() {
                       </span>
                     </td>
                     <td className="py-4 px-6 text-right">
+                      {/* ACTION BUTTONS (Appear on Hover) */}
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-2 text-on-surface-variant hover:text-secondary hover:bg-secondary-fixed/50 rounded-md transition-colors" title="Edit Student">
-                          <span className="material-symbols-outlined text-sm">edit</span>
+                        <button 
+                          onClick={() => handleEditStudent(student.id)} 
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" 
+                          title="Edit Student"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">edit</span>
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteStudent(student.id)} 
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" 
+                          title="Delete Student"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">delete</span>
                         </button>
                       </div>
                     </td>

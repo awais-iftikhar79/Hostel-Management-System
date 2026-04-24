@@ -185,20 +185,29 @@ def get_hostel_map(hostel_id: int, db: Session = Depends(get_db)):
         "rooms": rooms_data
     }
 
-# 7. Dynamic Bill Generator (Rent, Mess, Electricity) - NEW!
+# 7. Dynamic Bill Generator (Rent, Mess, Electricity)
 @router.post("/generate-bills")
 def generate_bills(data: dict, db: Session = Depends(get_db)):
     fee_type = data.get("fee_type") 
     total_amount = float(data.get("total_amount"))
-    room_id = data.get("room_id") 
+    target_type = data.get("target_type") # 'all', 'hostel', or 'room'
+    hostel_id = data.get("hostel_id")
+    room_number = data.get("room_number")
 
     rooms_to_bill = []
-    if room_id == "all":
+    
+    if target_type == "all":
         rooms_to_bill = db.query(Room).all()
-    else:
-        room = db.query(Room).filter(Room.id == int(room_id)).first()
+    elif target_type == "hostel" and hostel_id:
+        rooms_to_bill = db.query(Room).filter(Room.hostel_id == int(hostel_id)).all()
+    elif target_type == "room" and room_number and hostel_id:
+        # Filter by BOTH hostel and room number
+        room = db.query(Room).filter(Room.room_number == room_number, Room.hostel_id == int(hostel_id)).first()
         if room:
             rooms_to_bill.append(room)
+
+    if not rooms_to_bill:
+        raise HTTPException(status_code=404, detail="No rooms found for the selected target.")
 
     for room in rooms_to_bill:
         # Find active members in the room
@@ -306,13 +315,21 @@ def update_exchange_status(exchange_id: int, status_update: dict, db: Session = 
     db.commit()
     return {"message": f"Status updated to {exchange.status}"}
 
-# 12. Get All Payments - NEW! (Now includes your receipt_image_url)
+# 12. Get All Payments (Now includes Hostel ID and Floor for filters!)
 @router.get("/payments")
 def get_all_payments(db: Session = Depends(get_db)):
     payments = db.query(FeeRecord).order_by(FeeRecord.id.desc()).all()
     result = []
     for p in payments:
         student = db.query(StudentProfile).filter(StudentProfile.id == p.student_id).first()
+        
+        allocation = db.query(RoomAllocation).filter(RoomAllocation.student_id == p.student_id, RoomAllocation.is_active == True).first()
+        hostel_id = "none"
+        floor = "Unassigned"
+        if allocation and allocation.room:
+            hostel_id = str(allocation.room.hostel_id)
+            floor = getattr(allocation.room, "floor", "Ground Floor")
+            
         result.append({
             "id": p.id,
             "student_id_str": f"STU-{2026}-{str(p.student_id).zfill(4)}" if p.student_id else "N/A",
@@ -320,7 +337,9 @@ def get_all_payments(db: Session = Depends(get_db)):
             "fee_type": p.fee_type,
             "amount": p.amount,
             "status": p.status,
-            "receipt_url": p.receipt_image_url  # Using your exact column name!
+            "receipt_url": p.receipt_image_url,
+            "hostel_id": hostel_id, # Added for filtering
+            "floor": floor          # Added for filtering
         })
     return result
 
@@ -334,3 +353,60 @@ def update_payment_status(payment_id: int, status_update: dict, db: Session = De
     payment.status = status_update.get("status")
     db.commit()
     return {"message": f"Payment status updated to {payment.status}"}
+
+from pydantic import BaseModel
+
+# Schema for updating student info
+class StudentUpdate(BaseModel):
+    name: str
+
+# 13. Edit Student Name
+@router.put("/students/{student_id}")
+def update_student(student_id: int, student_data: StudentUpdate, db: Session = Depends(get_db)):
+    profile = db.query(StudentProfile).filter(StudentProfile.id == student_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Student not found")
+        
+    profile.name = student_data.name
+    db.commit()
+    return {"message": "Student updated successfully."}
+
+# 14. Delete Student (With strict error handling & safe User deletion)
+@router.delete("/students/{student_id}")
+def delete_student(student_id: int, db: Session = Depends(get_db)):
+    profile = db.query(StudentProfile).filter(StudentProfile.id == student_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    # Safely get the email to delete the login account later
+    student_email = getattr(profile, "email", None)
+
+    try:
+        # 1. Safely clean up all known associated records
+        db.query(RoomAllocation).filter(RoomAllocation.student_id == student_id).delete(synchronize_session=False)
+        db.query(FeeRecord).filter(FeeRecord.student_id == student_id).delete(synchronize_session=False)
+        db.query(Complaint).filter(Complaint.student_id == student_id).delete(synchronize_session=False)
+        db.query(RoomChangeRequest).filter(RoomChangeRequest.student_id == student_id).delete(synchronize_session=False)
+
+        # 2. Delete the profile itself
+        db.delete(profile)
+        db.flush() # Force the database to execute this so we can catch any hidden errors
+
+        # 3. Delete the actual User account (Login credentials) using their email
+        if student_email:
+            try:
+                from models.model import User # Import here to avoid circular dependencies
+                db.query(User).filter(User.email == student_email).delete(synchronize_session=False)
+            except Exception as e:
+                print(f"Skipped User deletion: {e}")
+            
+        # If everything succeeded, commit the changes!
+        db.commit()
+        return {"message": "Student and all associated records deleted successfully."}
+        
+    except Exception as e:
+        # If ANYTHING goes wrong, undo the changes and send the exact error to the frontend!
+        db.rollback()
+        error_msg = str(e)
+        print(f"\n--- DATABASE DELETE ERROR ---\n{error_msg}\n-----------------------------\n")
+        raise HTTPException(status_code=400, detail=f"Cannot delete student. Database Error: {error_msg}")
