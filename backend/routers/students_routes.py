@@ -167,3 +167,39 @@ def submit_room_exchange(data: dict, db: Session = Depends(get_db)):
     db.add(new_request)
     db.commit()
     return {"message": "Exchange request submitted successfully"}
+
+# --- NEW ROUTE: Get Student Payment History ---
+@router.get("/payments/{email}")
+def get_student_payments(email: str, db: Session = Depends(get_db)):
+    account = db.query(Account).filter(Account.email == email).first()
+    student = db.query(StudentProfile).filter(StudentProfile.account_id == account.id).first()
+    
+    # Fetch all fee records for this student
+    fees = db.query(FeeRecord).filter(FeeRecord.student_id == student.id).order_by(FeeRecord.id.desc()).all()
+    
+    # Calculate outstanding balance (only Open or Pending fees)
+    total_outstanding = sum(f.amount for f in fees if f.status in ["Pending", "Open", "Overdue"])
+    
+    # Group pending fees for the breakdown cards
+    breakdown = {
+        "Electricity": sum(f.amount for f in fees if f.fee_type == "Electricity" and f.status in ["Pending", "Open"]),
+        "Mess": sum(f.amount for f in fees if f.fee_type == "Mess" and f.status in ["Pending", "Open"]),
+        "Rent": sum(f.amount for f in fees if f.fee_type == "Rent" and f.status in ["Pending", "Open"])
+    }
+    
+    history = []
+    for f in fees:
+        history.append({
+            "id": f.id,
+            "invoice_id": f"#INV-{str(f.id).zfill(4)}",
+            "fee_type": f.fee_type,
+            "amount": f.amount,
+            "status": f.status,
+            "date": "Recent" # Placeholder since we didn't add timestamps to the FeeRecord model
+        })
+        
+    return {
+        "total_outstanding": total_outstanding,
+        "breakdown": breakdown,
+        "history": history
+    }

@@ -6,8 +6,10 @@ import RegisterStudent from './pages/RegisterStudent';
 import StudentDirectory from './pages/StudentDirectory';
 import ActionCenter from './pages/ActionCenter';
 import StudentDashboard from './pages/StudentDashboard';
+import StudentRoom from './pages/StudentRoom';
 import StudentMaintenance from './pages/StudentMaintenance';
 import StudentExchange from './pages/StudentExchange';
+import StudentPayments from './pages/StudentPayments';
 
 function App() {
   return (
@@ -25,8 +27,10 @@ function App() {
         <Route path="/admin/directory" element={<StudentDirectory />} />
         <Route path="/admin/action-center" element={<ActionCenter />} />
         <Route path="/student/dashboard" element={<StudentDashboard />} />
+        <Route path="/student/room" element={<StudentRoom />} />
         <Route path="/student/maintenance" element={<StudentMaintenance />} />
         <Route path="/student/exchange" element={<StudentExchange />} />
+        <Route path="/student/payments" element={<StudentPayments />} />
       </Routes>
     </Router>
   );
