@@ -199,7 +199,9 @@ def get_room_exchanges(db: Session = Depends(get_db)):
     for req in exchanges:
         student = db.query(StudentProfile).filter(StudentProfile.id == req.student_id).first()
         current_room = db.query(Room).filter(Room.id == req.current_room_id).first()
-        target_room = db.query(Room).filter(Room.id == req.target_room_id).first()
+        
+        # UPDATED: Use req.requested_room_id here
+        target_room = db.query(Room).filter(Room.id == req.requested_room_id).first()
         
         initials = "U"
         if student and student.name:
@@ -229,6 +231,7 @@ def update_exchange_status(exchange_id: int, status_update: dict, db: Session = 
     new_status = status_update.get("status")
     exchange.status = new_status
     
+    # Automatic Room Re-allocation Logic!
     if new_status == 'Approved':
         allocation = db.query(RoomAllocation).filter(
             RoomAllocation.student_id == exchange.student_id, 
@@ -236,15 +239,20 @@ def update_exchange_status(exchange_id: int, status_update: dict, db: Session = 
         ).first()
         
         if allocation:
+            # Free up old room
             old_room = db.query(Room).filter(Room.id == allocation.room_id).first()
             if old_room and old_room.current_occupancy > 0:
                 old_room.current_occupancy -= 1
             
-            new_room = db.query(Room).filter(Room.id == exchange.target_room_id).first()
+            # Occupy new room
+            # UPDATED: Use exchange.requested_room_id here
+            new_room = db.query(Room).filter(Room.id == exchange.requested_room_id).first()
             if new_room:
                 new_room.current_occupancy += 1
             
-            allocation.room_id = exchange.target_room_id
+            # Update the allocation record
+            # UPDATED: Use exchange.requested_room_id here
+            allocation.room_id = exchange.requested_room_id
 
     db.commit()
     return {"message": f"Status updated to {exchange.status}"}

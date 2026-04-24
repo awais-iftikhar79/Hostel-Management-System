@@ -6,6 +6,8 @@ import RegisterStudent from './pages/RegisterStudent';
 import StudentDirectory from './pages/StudentDirectory';
 import ActionCenter from './pages/ActionCenter';
 import StudentDashboard from './pages/StudentDashboard';
+import StudentMaintenance from './pages/StudentMaintenance';
+import StudentExchange from './pages/StudentExchange';
 
 function App() {
   return (
@@ -23,6 +25,8 @@ function App() {
         <Route path="/admin/directory" element={<StudentDirectory />} />
         <Route path="/admin/action-center" element={<ActionCenter />} />
         <Route path="/student/dashboard" element={<StudentDashboard />} />
+        <Route path="/student/maintenance" element={<StudentMaintenance />} />
+        <Route path="/student/exchange" element={<StudentExchange />} />
       </Routes>
     </Router>
   );
