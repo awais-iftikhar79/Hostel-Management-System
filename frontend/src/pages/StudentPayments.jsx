@@ -9,8 +9,9 @@ export default function StudentPayments() {
   
   // Modal State for uploading screenshot
   const [selectedFeeId, setSelectedFeeId] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
 
-  // NEW: Filter States for the table
+  // Filter States for the table
   const [feeTypeFilter, setFeeTypeFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
 
@@ -35,34 +36,43 @@ export default function StudentPayments() {
     fetchPayments();
   }, []);
 
-  // Upload Screenshot Handler
+  // --- UPDATED: Send the actual file using FormData ---
   const handleUploadScreenshot = async (e) => {
     e.preventDefault();
     const file = e.target.receipt.files[0];
     if (!file) return;
 
-    // Convert image to Base64 string for database storage
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:8000/student/pay-bill/${selectedFeeId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ receipt_url: reader.result })
-            });
+    setIsUploading(true);
 
-            if(response.ok) {
-                setSelectedFeeId(null);
-                window.location.reload(); // Refresh to show "Under Review"
-            } else {
-                alert("Failed to upload screenshot.");
-            }
-        } catch(err) {
-            console.error(err);
+    // Create FormData to send the file correctly
+    const formData = new FormData();
+    formData.append('file', file); // The name 'file' must match the backend parameter
+
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`http://localhost:8000/student/pay-bill/${selectedFeeId}`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${token}` 
+                // Note: We DO NOT set 'Content-Type' here. The browser automatically 
+                // sets it to 'multipart/form-data' when it sees the FormData object!
+            },
+            body: formData
+        });
+
+        if(response.ok) {
+            setSelectedFeeId(null);
+            window.location.reload(); // Refresh to show "Under Review"
+        } else {
+            const err = await response.json();
+            alert(err.detail || "Failed to upload screenshot.");
         }
-    };
-    reader.readAsDataURL(file);
+    } catch(err) {
+        console.error(err);
+        alert("An error occurred during upload.");
+    } finally {
+        setIsUploading(false);
+    }
   };
 
   // Helper to normalize status for the UI badges
@@ -82,8 +92,8 @@ export default function StudentPayments() {
     return <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">{s}</span>;
   };
 
-  if (loading) return <StudentLayout><div className="p-8">Loading financial records...</div></StudentLayout>;
-  if (error) return <StudentLayout><div className="p-8 text-error">Error: {error}</div></StudentLayout>;
+  if (loading) return <StudentLayout><div className="p-8 text-slate-500 font-medium">Loading financial records...</div></StudentLayout>;
+  if (error) return <StudentLayout><div className="p-8 text-red-500 font-medium">Error: {error}</div></StudentLayout>;
 
   // Apply filters to the payment history
   const filteredHistory = paymentData.history.filter(record => {
@@ -96,7 +106,6 @@ export default function StudentPayments() {
   return (
     <StudentLayout>
       
-      {/* --- UPDATED HEADER WITH NEW TYPOGRAPHY --- */}
       <div className="mb-8">
         <h1 className="text-[32px] font-bold text-slate-900 tracking-tight mb-2">
           Fee &amp; Payments
@@ -109,37 +118,37 @@ export default function StudentPayments() {
       <div className="grid grid-cols-12 gap-6">
         {/* Outstanding Balance Banner */}
         <section className="col-span-12">
-          <div className="bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm flex flex-col md:flex-row">
-            <div className="bg-primary p-8 md:w-1/3 flex flex-col justify-center items-start">
-              <div className="flex items-center gap-2 text-on-primary/70 mb-2">
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col md:flex-row">
+            <div className="bg-slate-900 p-8 md:w-1/3 flex flex-col justify-center items-start">
+              <div className="flex items-center gap-2 text-slate-400 mb-2">
                 <span className="material-symbols-outlined text-[20px]">account_balance_wallet</span>
-                <span className="font-label-md text-label-md uppercase tracking-wider">Total Outstanding</span>
+                <span className="text-sm font-bold uppercase tracking-wider">Total Outstanding</span>
               </div>
               <div className="text-white">
                 <span className="text-[36px] font-bold block tracking-tight">Rs. {paymentData.total_outstanding}</span>
-                <span className="font-body-sm text-on-primary/70">Due by 15th of the month</span>
+                <span className="text-sm font-medium text-slate-400">Due by 15th of the month</span>
               </div>
-              <button disabled={paymentData.total_outstanding === 0} className="mt-6 bg-secondary text-white font-label-md px-6 py-3 rounded-lg hover:bg-secondary/90 transition-all flex items-center gap-2 disabled:opacity-50">
+              <button disabled={paymentData.total_outstanding === 0} className="mt-6 bg-blue-600 text-white text-sm font-bold px-6 py-3 rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2 disabled:opacity-50 disabled:bg-slate-700 shadow-sm">
                 <span>{paymentData.total_outstanding === 0 ? 'All Settled' : 'Pay Pending Bills Below'}</span>
                 <span className="material-symbols-outlined text-[18px]">arrow_downward</span>
               </button>
             </div>
 
             <div className="p-8 md:w-2/3 grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-4 bg-surface rounded-lg border border-outline-variant/30">
-                <div className="flex items-center gap-2 mb-2 text-secondary"><span className="material-symbols-outlined text-[20px]">restaurant</span><h3 className="font-label-md">Mess Bill</h3></div>
-                <p className="font-h2 text-h2 text-primary">Rs. {paymentData.breakdown.Mess || 0}</p>
-                <p className="text-body-sm text-on-surface-variant mt-1">Pending Amount</p>
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-2 mb-2 text-blue-600"><span className="material-symbols-outlined text-[20px]">restaurant</span><h3 className="font-bold text-slate-700">Mess Bill</h3></div>
+                <p className="text-2xl font-bold text-slate-900">Rs. {paymentData.breakdown.Mess || 0}</p>
+                <p className="text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wider">Pending Amount</p>
               </div>
-              <div className="p-4 bg-surface rounded-lg border border-outline-variant/30">
-                <div className="flex items-center gap-2 mb-2 text-secondary"><span className="material-symbols-outlined text-[20px]">bolt</span><h3 className="font-label-md">Electricity</h3></div>
-                <p className="font-h2 text-h2 text-primary">Rs. {paymentData.breakdown.Electricity || 0}</p>
-                <p className="text-body-sm text-on-surface-variant mt-1">Pending Amount</p>
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-2 mb-2 text-blue-600"><span className="material-symbols-outlined text-[20px]">bolt</span><h3 className="font-bold text-slate-700">Electricity</h3></div>
+                <p className="text-2xl font-bold text-slate-900">Rs. {paymentData.breakdown.Electricity || 0}</p>
+                <p className="text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wider">Pending Amount</p>
               </div>
-              <div className="p-4 bg-surface rounded-lg border border-outline-variant/30">
-                <div className="flex items-center gap-2 mb-2 text-secondary"><span className="material-symbols-outlined text-[20px]">meeting_room</span><h3 className="font-label-md">Room Rent</h3></div>
-                <p className="font-h2 text-h2 text-primary">Rs. {paymentData.breakdown.Rent || 0}</p>
-                <p className="text-body-sm text-on-surface-variant mt-1">Pending Amount</p>
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-2 mb-2 text-blue-600"><span className="material-symbols-outlined text-[20px]">meeting_room</span><h3 className="font-bold text-slate-700">Room Rent</h3></div>
+                <p className="text-2xl font-bold text-slate-900">Rs. {paymentData.breakdown.Rent || 0}</p>
+                <p className="text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wider">Pending Amount</p>
               </div>
             </div>
           </div>
@@ -147,14 +156,12 @@ export default function StudentPayments() {
 
         {/* Payment History Table */}
         <section className="col-span-12">
-          <div className="bg-white border border-outline-variant rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
             
-            {/* NEW: Filter Header */}
-            <div className="px-8 py-6 border-b border-outline-variant flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50/50">
-              <h2 className="font-h3 text-h3 text-primary">Payment History & Pending Bills</h2>
+            <div className="px-8 py-6 border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50/50">
+              <h2 className="text-xl font-bold text-slate-800">Payment History & Pending Bills</h2>
               
               <div className="flex flex-wrap items-center gap-3">
-                {/* Fee Type Dropdown */}
                 <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md px-2 py-1 shadow-sm">
                   <span className="material-symbols-outlined text-[18px] text-slate-400">category</span>
                   <select 
@@ -169,7 +176,6 @@ export default function StudentPayments() {
                   </select>
                 </div>
 
-                {/* Status Dropdown */}
                 <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md px-2 py-1 shadow-sm">
                   <span className="material-symbols-outlined text-[18px] text-slate-400">filter_list</span>
                   <select 
@@ -189,38 +195,37 @@ export default function StudentPayments() {
             
             <div className="overflow-x-auto">
               <table className="w-full text-left">
-                <thead className="bg-surface text-on-surface-variant">
+                <thead className="bg-slate-50 text-slate-500">
                   <tr>
-                    <th className="px-8 py-4 font-label-md uppercase tracking-wider text-[11px] border-b border-outline-variant">Invoice ID</th>
-                    <th className="px-8 py-4 font-label-md uppercase tracking-wider text-[11px] border-b border-outline-variant">Fee Type</th>
-                    <th className="px-8 py-4 font-label-md uppercase tracking-wider text-[11px] border-b border-outline-variant">Amount</th>
-                    <th className="px-8 py-4 font-label-md uppercase tracking-wider text-[11px] border-b border-outline-variant text-center">Status</th>
-                    <th className="px-8 py-4 font-label-md uppercase tracking-wider text-[11px] border-b border-outline-variant text-right">Actions</th>
+                    <th className="px-8 py-4 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200">Invoice ID</th>
+                    <th className="px-8 py-4 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200">Fee Type</th>
+                    <th className="px-8 py-4 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200">Amount</th>
+                    <th className="px-8 py-4 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200 text-center">Status</th>
+                    <th className="px-8 py-4 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-outline-variant/50">
+                <tbody className="divide-y divide-slate-100">
                   {filteredHistory.length === 0 ? (
-                    <tr><td colSpan="5" className="px-8 py-8 text-center text-on-surface-variant">No matching payment records found.</td></tr>
+                    <tr><td colSpan="5" className="px-8 py-12 text-center text-slate-500 font-medium">No matching payment records found.</td></tr>
                   ) : (
                     filteredHistory.map((record) => (
-                      <tr key={record.id} className="hover:bg-surface/50 transition-colors group">
-                        <td className="px-8 py-4 font-label-md text-primary font-mono">{record.invoice_id}</td>
-                        <td className="px-8 py-4 font-body-md"><div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-secondary"></span>{record.fee_type}</div></td>
-                        <td className="px-8 py-4 font-label-md text-primary">Rs. {record.amount}</td>
+                      <tr key={record.id} className="hover:bg-slate-50 transition-colors group">
+                        <td className="px-8 py-4 text-sm font-semibold text-slate-800 font-mono">{record.invoice_id}</td>
+                        <td className="px-8 py-4 text-sm font-medium text-slate-700"><div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500"></span>{record.fee_type}</div></td>
+                        <td className="px-8 py-4 text-sm font-bold text-slate-900">Rs. {record.amount}</td>
                         <td className="px-8 py-4 text-center">{getStatusBadge(record.status)}</td>
                         <td className="px-8 py-4 text-right">
-                            {/* UPLOAD SCREENSHOT LOGIC */}
                             {(record.status === 'Pending' || record.status === 'Open' || record.status === 'Rejected') ? (
                                 <button 
                                     onClick={() => setSelectedFeeId(record.id)} 
-                                    className="px-3 py-1.5 bg-secondary text-white rounded font-label-sm hover:bg-secondary/90 transition-colors flex items-center justify-end gap-1 ml-auto shadow-sm"
+                                    className="px-3 py-1.5 bg-slate-900 text-white rounded-md text-xs font-bold hover:bg-slate-800 transition-colors flex items-center justify-end gap-1 ml-auto shadow-sm"
                                 >
                                     <span className="material-symbols-outlined text-[16px]">upload</span> Pay Now
                                 </button>
                             ) : record.status === 'Under Review' ? (
-                                <span className="text-blue-600 text-sm font-medium">Waiting for Admin</span>
+                                <span className="text-blue-600 text-sm font-semibold">Waiting for Admin</span>
                             ) : (
-                                <span className="text-emerald-600 text-sm font-medium flex items-center justify-end gap-1"><span className="material-symbols-outlined text-[16px]">check_circle</span> Verified</span>
+                                <span className="text-emerald-600 text-sm font-semibold flex items-center justify-end gap-1"><span className="material-symbols-outlined text-[16px]">check_circle</span> Verified</span>
                             )}
                         </td>
                       </tr>
@@ -235,28 +240,35 @@ export default function StudentPayments() {
 
       {/* MODAL: Upload Screenshot */}
       {selectedFeeId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 border border-slate-200">
-            <h2 className="font-h3 text-slate-800 mb-4 flex items-center gap-2">
-                <span className="material-symbols-outlined text-secondary">cloud_upload</span>
-                Upload Payment Screenshot
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 border border-slate-200">
+            <h2 className="text-xl font-bold text-slate-900 mb-2 flex items-center gap-2">
+                <span className="material-symbols-outlined text-blue-600">cloud_upload</span>
+                Upload Receipt
             </h2>
-            <p className="text-sm text-slate-500 mb-6">Please transfer the due amount to the hostel bank account and upload a clear screenshot of the successful transaction.</p>
+            <p className="text-sm text-slate-500 mb-6 font-medium leading-relaxed">Please transfer the due amount to the hostel bank account and upload a clear screenshot of the successful transaction.</p>
             
-            <form onSubmit={handleUploadScreenshot} className="space-y-4">
-              <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition-colors">
+            <form onSubmit={handleUploadScreenshot} className="space-y-5">
+              <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 hover:border-blue-400 transition-all cursor-pointer">
                 <input 
                     type="file" 
                     name="receipt" 
-                    accept="image/png, image/jpeg" 
+                    accept="image/png, image/jpeg, image/jpg" 
                     required 
-                    className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-secondary/10 file:text-secondary hover:file:bg-secondary/20 cursor-pointer" 
+                    className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer outline-none" 
                 />
               </div>
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button type="button" onClick={() => setSelectedFeeId(null)} className="px-4 py-2 text-slate-600 bg-slate-100 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-secondary text-white rounded-lg text-sm font-medium hover:bg-secondary/90 flex items-center gap-1 shadow-sm transition-colors">
-                    Submit for Verification
+                <button type="button" onClick={() => setSelectedFeeId(null)} className="px-4 py-2 text-slate-600 bg-slate-100 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors">Cancel</button>
+                <button type="submit" disabled={isUploading} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-2 shadow-sm transition-colors disabled:opacity-50">
+                    {isUploading ? (
+                        <>Uploading...</>
+                    ) : (
+                        <>
+                            Submit for Verification
+                            <span className="material-symbols-outlined text-[18px]">send</span>
+                        </>
+                    )}
                 </button>
               </div>
             </form>

@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles  # <-- NEW IMPORT
 from routers import auth_router
 from routers import admin_routes 
 from routers import students_routes
-
-
+import os
 
 app = FastAPI(title="Hostel ERP System", version="1.0")
 
@@ -18,14 +18,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- SERVE STATIC FILES (IMAGE UPLOADS) ---
+# Ensure the uploads directory exists before mounting to prevent startup errors
+os.makedirs("uploads", exist_ok=True)
+# This exposes the "uploads" folder so React can display the images!
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 # --- ROUTER REGISTRATION ---
 app.include_router(auth_router.router)
+app.include_router(admin_routes.router)
+app.include_router(students_routes.router)
 
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Hostel ERP API. Go to /docs to test the endpoints."}
-
-# Add this below your auth_router line:
-app.include_router(admin_routes.router)
-
-app.include_router(students_routes.router)

@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from database import get_db
 from models.model import Account, StudentProfile, RoomAllocation, Room, Hostel, FeeRecord, Complaint, RoomChangeRequest
+import shutil
+import os
+import uuid
 
 router = APIRouter(prefix="/student", tags=["Student Operations"])
 
@@ -196,15 +199,28 @@ def get_student_payments(email: str, db: Session = Depends(get_db)):
         "history": history
     }
 
-# --- NEW ROUTE: Submit Payment Screenshot ---
+# --- UPDATED ROUTE: Actually accepts file uploads! ---
 @router.post("/pay-bill/{fee_id}")
-def pay_bill(fee_id: int, data: dict, db: Session = Depends(get_db)):
+async def pay_bill(fee_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
     fee = db.query(FeeRecord).filter(FeeRecord.id == fee_id).first()
     if not fee:
         raise HTTPException(status_code=404, detail="Fee record not found")
     
-    # Using your exact column name: receipt_image_url
-    fee.receipt_image_url = data.get("receipt_url") 
+    # Ensure the uploads directory exists
+    os.makedirs("uploads", exist_ok=True)
+    
+    # Create a unique filename so files don't overwrite each other
+    file_extension = file.filename.split(".")[-1]
+    unique_filename = f"receipt_{fee_id}_{uuid.uuid4().hex[:8]}.{file_extension}"
+    file_path = os.path.join("uploads", unique_filename)
+    
+    # Save the file securely to the uploads folder
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    # Save the static URL to the database
+    fee.receipt_image_url = f"/uploads/{unique_filename}" 
     fee.status = "Under Review" 
     db.commit()
-    return {"message": "Payment submitted for verification"}
+    
+    return {"message": "Payment receipt uploaded for verification!", "url": fee.receipt_image_url}
