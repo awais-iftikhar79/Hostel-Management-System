@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AdminLayout from '../components/AdminLayout';
+import DatabaseSync from '../components/DatabaseSync'; // <-- IMPORT THE NEW COMPONENT
 
 export default function AdminDashboard() {
   const [hostels, setHostels] = useState([]);
@@ -34,7 +35,6 @@ export default function AdminDashboard() {
 
   // Fetch the map data for the selected hostel
   useEffect(() => {
-    // NEW: If "All Hostels" is selected, stop loading and clear room data!
     if (selectedHostel === 'all') {
       setRoomData([]);
       setLoading(false);
@@ -120,7 +120,10 @@ export default function AdminDashboard() {
         {/* --- ALL HOSTELS VIEW --- */}
         {selectedHostel === 'all' ? (
           <div>
-            <div className="mb-10">
+            {/* INJECTED COMPONENT: Database Sync is only visible on the main 'All Hostels' overview */}
+            <DatabaseSync />
+
+            <div className="mb-10 mt-8 border-t border-slate-200 pt-8">
               <h1 className="text-[32px] font-bold text-slate-900 tracking-tight mb-2">Campus Overview</h1>
               <p className="text-[16px] text-slate-500 font-medium">Please select a specific hostel from the top dropdown to view its detailed Room Map.</p>
             </div>

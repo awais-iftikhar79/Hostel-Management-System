@@ -12,3 +12,4 @@ __pycache__/
 
 # Uploaded Files (we don't want to push student receipts to GitHub!)
 uploads/
+firebase-credentials.json

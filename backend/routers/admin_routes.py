@@ -2,6 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
+from firebase_sync import backup_postgres_to_firebase
+from models.model import BackupLog
+import uuid
+from datetime import datetime
+from models.model import BackupLog
+from sqlalchemy import desc
 
 from models.model import Account, StudentProfile, Hostel, Room, RoomAllocation, FeeRecord, Complaint, RoomChangeRequest
 from schemas.schema import AccountCreate, AccountResponse, HostelCreate, HostelResponse, RoomAllocationCreate, RoomAllocationResponse, ComplaintResponse
@@ -410,3 +416,41 @@ def delete_student(student_id: int, db: Session = Depends(get_db)):
         error_msg = str(e)
         print(f"\n--- DATABASE DELETE ERROR ---\n{error_msg}\n-----------------------------\n")
         raise HTTPException(status_code=400, detail=f"Cannot delete student. Database Error: {error_msg}")
+    
+@router.post("/database/backup")
+def trigger_cloud_backup(db: Session = Depends(get_db)):
+    # 1. Run the actual backup
+    result = backup_postgres_to_firebase(db)
+    
+    if result["status"] == "error":
+        raise HTTPException(status_code=500, detail=result["message"])
+    
+    # 2. Record the successful event in the Postgres Audit Log
+    new_snapshot_id = f"SNAP-{str(uuid.uuid4())[:8].upper()}"
+    log_entry = BackupLog(
+        snapshot_id=new_snapshot_id,
+        trigger_type="Manual Admin Action",
+        status="Verified"
+    )
+    db.add(log_entry)
+    db.commit()
+    
+    return {"message": result["message"], "snapshot_id": new_snapshot_id}
+
+
+@router.get("/database/backup/history")
+def get_backup_history(db: Session = Depends(get_db)):
+    # Fetch all logs, newest first
+    logs = db.query(BackupLog).order_by(desc(BackupLog.timestamp)).all()
+    
+    # Format them so React can easily read them
+    formatted_logs = []
+    for log in logs:
+        formatted_logs.append({
+            "id": log.snapshot_id,
+            "date": log.timestamp.strftime("%B %d, %Y"),
+            "time": log.timestamp.strftime("%I:%M %p"),
+            "type": log.trigger_type,
+            "status": log.status
+        })
+    return formatted_logs
