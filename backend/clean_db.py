@@ -1,4 +1,4 @@
-# clean_db.py
+import sys
 from database import SessionLocal
 from models.model import (
     Account, 
@@ -8,47 +8,68 @@ from models.model import (
     Complaint, 
     RoomChangeRequest, 
     Room, 
-    Hostel
+    Hostel,
+    BackupLog
 )
 
 def reset_database():
+    """
+    Executes a comprehensive, cascading truncation of the relational database.
+    Maintains referential integrity by purging child dependency tables before parents.
+    Preserves master administrative credentials.
+    """
     db = SessionLocal()
     try:
-        print("🧹 Starting database cleanup...")
+        print("INFO: Initializing database purge sequence...")
 
-        # 1. Delete all dependent child records first
-        print("Deleting allocations, fees, complaints, and requests...")
-        db.query(RoomAllocation).delete()
-        db.query(FeeRecord).delete()
-        db.query(Complaint).delete()
-        db.query(RoomChangeRequest).delete()
+        # Phase 1: Purge transactional, financial, and temporal dependency tables
+        print("INFO: Purging transaction ledgers, allocations, and user requests...")
+        db.query(RoomAllocation).delete(synchronize_session=False)
+        db.query(FeeRecord).delete(synchronize_session=False)
+        db.query(Complaint).delete(synchronize_session=False)
+        db.query(RoomChangeRequest).delete(synchronize_session=False)
+        db.query(BackupLog).delete(synchronize_session=False)
 
-        # 2. Delete rooms and hostels
-        print("Deleting rooms and hostels...")
-        db.query(Room).delete()
-        db.query(Hostel).delete()
+        # Phase 2: Purge physical campus infrastructure
+        print("INFO: Deconstructing physical campus topology (Rooms & Hostels)...")
+        db.query(Room).delete(synchronize_session=False)
+        db.query(Hostel).delete(synchronize_session=False)
 
-        # 3. Delete student profiles
-        print("Deleting student profiles...")
-        db.query(StudentProfile).delete()
+        # Phase 3: Purge user metadata
+        print("INFO: Purging student metadata profiles...")
+        db.query(StudentProfile).delete(synchronize_session=False)
 
-        # 4. Delete all accounts EXCEPT the admin
-        print("Deleting non-admin accounts...")
-        db.query(Account).filter(Account.role != 'admin').delete()
+        # Phase 4: Purge core authentication credentials (excluding Master Admin)
+        print("INFO: Purging standard authentication credentials...")
+        db.query(Account).filter(Account.role != 'admin').delete(synchronize_session=False)
 
-        # Commit the massive delete operation!
+        # Execute transaction
         db.commit()
-        print("✅ Database cleaned successfully! Only Admin credentials remain.")
+        print("SUCCESS: Database schema successfully reset. Master admin identity preserved.")
 
     except Exception as e:
+        # Failsafe rollback to prevent database corruption
         db.rollback()
-        print(f"❌ An error occurred: {e}")
+        print(f"CRITICAL ERROR: Transaction failed. Changes rolled back. Details: {e}")
+        sys.exit(1)
     finally:
         db.close()
 
 if __name__ == "__main__":
-    confirm = input("⚠️ WARNING: This will delete ALL students, hostels, and records. Type 'YES' to continue: ")
-    if confirm == 'YES':
+    # Enterprise-grade CLI warning block
+    print("\n" + "="*55)
+    print(" 🚨 WARNING: CRITICAL SYSTEM OPERATION 🚨")
+    print("="*55)
+    print("This operation will permanently destroy all relational data:")
+    print("  - Student Profiles, Assignments, and Accounts")
+    print("  - Financial Ledgers and Payment History")
+    print("  - Campus Infrastructure (Hostels & Rooms)")
+    print("  - Cloud Synchronization Audit Logs")
+    print("="*55)
+    
+    confirm = input("To proceed with the purge, type 'CONFIRM_PURGE': ")
+    
+    if confirm == 'CONFIRM_PURGE':
         reset_database()
     else:
-        print("Cleanup aborted.")
+        print("ABORTED: Operation cancelled. No data was modified.")

@@ -1,21 +1,28 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Enum
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
 
-# 1. Create an 'Account' model: id, email, password_hash, role (String: admin or student).
 class Account(Base):
+    """
+    Core authentication table. 
+    Handles identity and Role-Based Access Control (RBAC) mapping.
+    """
     __tablename__ = 'accounts'
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    role = Column(String, nullable=False)  # 'admin' or 'student'
+    role = Column(String, nullable=False)  # Configured for 'admin' or 'student'
     
-    # Relationship to Student (one-to-one)
+    # Relationships
     student_profile = relationship("StudentProfile", back_populates="account")    
-# 2. Create a 'StudentProfile' model: id, account_id (ForeignKey to Account), name, phone. Add a relationship back to Account.
+
 class StudentProfile(Base):
+    """
+    Central hub for student metadata. 
+    Linked 1-to-1 with the authentication Account entity.
+    """
     __tablename__ = 'student_profiles'
     
     id = Column(Integer, primary_key=True, index=True)
@@ -23,14 +30,17 @@ class StudentProfile(Base):
     name = Column(String, nullable=False)
     phone = Column(String, nullable=True)
     
-    # Relationship back to Account
+    # Relationships
+    account = relationship("Account", back_populates="student_profile")    
     fees = relationship("FeeRecord", back_populates="student")
     allocations = relationship("RoomAllocation", back_populates="student")
-    account = relationship("Account", back_populates="student_profile")    
     complaints = relationship("Complaint", back_populates="student")
     room_change_requests = relationship("RoomChangeRequest", back_populates="student")  
-# 3. Create a 'Hostel' model: id, name, total_rooms.
+
 class Hostel(Base):
+    """
+    Top-level geographical entity representing a physical building on campus.
+    """
     __tablename__ = 'hostels'
     
     id = Column(Integer, primary_key=True, index=True)
@@ -38,11 +48,14 @@ class Hostel(Base):
     total_rooms = Column(Integer, nullable=False)
     total_floors = Column(Integer, default=1)
     
-    # Relationship to Room (one-to-many)
+    # Relationships
     rooms = relationship("Room", back_populates="hostel")
     
-# 4. Create a 'Room' model: id, hostel_id (ForeignKey to Hostel), room_number, capacity, current_occupancy. Add a relationship to Hostel.
 class Room(Base):
+    """
+    Physical living space entity. 
+    Tracks dynamic capacity constraints to prevent overbooking.
+    """
     __tablename__ = 'rooms'
     
     id = Column(Integer, primary_key=True, index=True)
@@ -52,16 +65,18 @@ class Room(Base):
     current_occupancy = Column(Integer, default=0)
     floor = Column(String, default="Ground Floor")
     
-    # Relationship to Hostel
+    # Relationships
     hostel = relationship("Hostel", back_populates="rooms")
-    
-    # Relationship to Booking (one-to-many)
     allocations = relationship("RoomAllocation", back_populates="room")    
     complaints = relationship("Complaint", back_populates="room")
     current_room_requests = relationship("RoomChangeRequest", foreign_keys="RoomChangeRequest.current_room_id", back_populates="current_room")
     requested_room_requests = relationship("RoomChangeRequest", foreign_keys="RoomChangeRequest.requested_room_id", back_populates="requested_room")
-# 5. Create a 'RoomAllocation' model (For History): id, student_id (ForeignKey to StudentProfile), room_id (ForeignKey to Room), start_date, end_date (nullable), is_active (boolean default True).
+
 class RoomAllocation(Base):
+    """
+    Temporal junction table mapping students to rooms. 
+    Preserves historical allocation records using start/end dates.
+    """
     __tablename__ = 'room_allocations'
     
     id = Column(Integer, primary_key=True, index=True)
@@ -74,23 +89,27 @@ class RoomAllocation(Base):
     # Relationships
     student = relationship("StudentProfile", back_populates="allocations")
     room = relationship("Room", back_populates="allocations")    
-# 6. Create a 'FeeRecord' model: id, student_id (ForeignKey to StudentProfile), amount, fee_type (String: Electricity, Rent), status (String: Pending, Approved, Rejected), receipt_image_url (String nullable).
+
 class FeeRecord(Base):
+    """
+    Financial ledger tracking individual student payments and receipt verifications.
+    """
     __tablename__ = 'fee_records'
     
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey('student_profiles.id'), nullable=False)
     amount = Column(Integer, nullable=False)
-    fee_type = Column(String, nullable=False)  # 'Electricity' or 'Rent'
-    status = Column(String, nullable=False)  # 'Pending', 'Approved', 'Rejected'
+    fee_type = Column(String, nullable=False)
+    status = Column(String, nullable=False)
     receipt_image_url = Column(String, nullable=True)
     
-    # Relationship to StudentProfile
+    # Relationships
     student = relationship("StudentProfile", back_populates="fees")
     
-    
-# 7. Create a 'Complaint' model: id, room_id (ForeignKey to Room), student_id (ForeignKey to StudentProfile), category, description, status, priority.
 class Complaint(Base):
+    """
+    Maintenance ticketing system linking specific room issues to the reporting student.
+    """
     __tablename__ = 'complaints'
     
     id = Column(Integer, primary_key=True, index=True)
@@ -98,15 +117,17 @@ class Complaint(Base):
     student_id = Column(Integer, ForeignKey('student_profiles.id'), nullable=False)
     category = Column(String, nullable=False)
     description = Column(String, nullable=False)
-    status = Column(String, nullable=False)  # 'Open', 'In Progress', 'Resolved'
-    priority = Column(String, nullable=False)  # 'Low', 'Medium', 'High'
+    status = Column(String, nullable=False)
+    priority = Column(String, nullable=False)
     
     # Relationships
     room = relationship("Room", back_populates="complaints")
     student = relationship("StudentProfile", back_populates="complaints")
     
-# 8. Create a 'RoomChangeRequest' model: id, student_id (ForeignKey to StudentProfile), current_room_id (ForeignKey to Room), requested_room_id (ForeignKey to Room), reason, status (String: Pending, Approved).
 class RoomChangeRequest(Base):
+    """
+    Approval workflow entity managing student transfer requests between rooms.
+    """
     __tablename__ = 'room_change_requests'
     
     id = Column(Integer, primary_key=True, index=True)
@@ -114,7 +135,7 @@ class RoomChangeRequest(Base):
     current_room_id = Column(Integer, ForeignKey('rooms.id'), nullable=False)
     requested_room_id = Column(Integer, ForeignKey('rooms.id'), nullable=False)
     reason = Column(String, nullable=False)
-    status = Column(String, nullable=False)  # 'Pending', 'Approved'
+    status = Column(String, nullable=False)
     
     # Relationships
     student = relationship("StudentProfile", back_populates="room_change_requests")
@@ -122,7 +143,11 @@ class RoomChangeRequest(Base):
     requested_room = relationship("Room", foreign_keys=[requested_room_id], back_populates="requested_room_requests")
     
 class BackupLog(Base):
+    """
+    Immutable audit trail logging cloud synchronization events with Firebase.
+    """
     __tablename__ = 'backup_logs'
+    
     id = Column(Integer, primary_key=True, index=True)
     snapshot_id = Column(String, unique=True, index=True)
     timestamp = Column(DateTime, default=datetime.now)

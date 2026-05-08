@@ -1,34 +1,42 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles  # <-- NEW IMPORT
+from fastapi.staticfiles import StaticFiles
+
+# Local modular routers
 from routers import auth_router
 from routers import admin_routes 
 from routers import students_routes
-import os
 
-app = FastAPI(title="Hostel ERP System", version="1.0")
+# Initialize the core API gateway with OpenAPI documentation metadata
+app = FastAPI(
+    title="Hostel ERP System", 
+    description="Core API gateway handling authentication, administration, and student operations.",
+    version="1.0"
+)
 
-# --- CORS SETUP ---
-# This allows your React frontend to talk to this backend without getting blocked.
+# Configure Cross-Origin Resource Sharing (CORS) for frontend integration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, change this to your React URL (e.g., http://localhost:3000)
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- SERVE STATIC FILES (IMAGE UPLOADS) ---
-# Ensure the uploads directory exists before mounting to prevent startup errors
+# Provision static file serving for user-uploaded assets (e.g., payment receipts)
 os.makedirs("uploads", exist_ok=True)
-# This exposes the "uploads" folder so React can display the images!
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# --- ROUTER REGISTRATION ---
+# Register modular API routers to the main application tree
 app.include_router(auth_router.router)
 app.include_router(admin_routes.router)
 app.include_router(students_routes.router)
 
-@app.get("/")
+@app.get("/", tags=["Health Check"])
 def read_root():
-    return {"message": "Welcome to the Hostel ERP API. Go to /docs to test the endpoints."}
+    """
+    Base health check endpoint to verify API operational status.
+    Provides navigation to the Swagger UI configuration.
+    """
+    return {"message": "Hostel ERP API is active. Navigate to /docs for interactive API documentation."}

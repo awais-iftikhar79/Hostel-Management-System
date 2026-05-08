@@ -10,13 +10,18 @@ router = APIRouter(prefix="/student", tags=["Student Operations"])
 
 @router.get("/dashboard/{email}")
 def get_student_dashboard(email: str, db: Session = Depends(get_db)):
+    """
+    Aggregates a comprehensive overview for the student portal homepage.
+    Performs multi-table joins to retrieve current housing, roommate data, 
+    pending financial liabilities, and recent system activities.
+    """
     account = db.query(Account).filter(Account.email == email).first()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
         
     student = db.query(StudentProfile).filter(StudentProfile.account_id == account.id).first()
     
-    # 1. Get Room Info
+    # Phase 1: Aggregate housing allocation and roommate data
     allocation = db.query(RoomAllocation).filter(
         RoomAllocation.student_id == student.id, 
         RoomAllocation.is_active == True
@@ -27,6 +32,7 @@ def get_student_dashboard(email: str, db: Session = Depends(get_db)):
         room = allocation.room
         hostel = db.query(Hostel).filter(Hostel.id == room.hostel_id).first()
         
+        # Identify active roommates excluding the requesting student
         roommates_alloc = db.query(RoomAllocation).filter(
             RoomAllocation.room_id == room.id,
             RoomAllocation.is_active == True,
@@ -45,15 +51,16 @@ def get_student_dashboard(email: str, db: Session = Depends(get_db)):
             "roommates": roommates
         }
 
-    # 2. Get Financials
+    # Phase 2: Compute outstanding financial liabilities
     fees = db.query(FeeRecord).filter(FeeRecord.student_id == student.id, FeeRecord.status == "Pending").all()
     total_balance = sum(f.amount for f in fees)
     fee_details = [{"type": f.fee_type, "amount": f.amount} for f in fees]
 
-    # 3. Get Recent Activity
+    # Phase 3: Compile recent ticketing and transfer activity
     complaints = db.query(Complaint).filter(Complaint.student_id == student.id).all()
     exchanges = db.query(RoomChangeRequest).filter(RoomChangeRequest.student_id == student.id).all()
     
+    # Sort chronologically and limit payload size for dashboard performance
     complaints = sorted(complaints, key=lambda x: x.id, reverse=True)[:3]
     exchanges = sorted(exchanges, key=lambda x: x.id, reverse=True)[:2]
 
@@ -88,6 +95,9 @@ def get_student_dashboard(email: str, db: Session = Depends(get_db)):
 
 @router.get("/complaints/{email}")
 def get_student_complaints(email: str, db: Session = Depends(get_db)):
+    """
+    Retrieves the complete maintenance ticketing history for a specific student.
+    """
     account = db.query(Account).filter(Account.email == email).first()
     student = db.query(StudentProfile).filter(StudentProfile.account_id == account.id).first()
     
@@ -106,6 +116,10 @@ def get_student_complaints(email: str, db: Session = Depends(get_db)):
 
 @router.post("/complaints")
 def submit_complaint(data: dict, db: Session = Depends(get_db)):
+    """
+    Registers a new maintenance ticket. 
+    Enforces a validation check to ensure the student has an active room assignment.
+    """
     account = db.query(Account).filter(Account.email == data['email']).first()
     student = db.query(StudentProfile).filter(StudentProfile.account_id == account.id).first()
     allocation = db.query(RoomAllocation).filter(RoomAllocation.student_id == student.id, RoomAllocation.is_active == True).first()
@@ -127,6 +141,9 @@ def submit_complaint(data: dict, db: Session = Depends(get_db)):
 
 @router.get("/exchanges/{email}")
 def get_student_exchanges(email: str, db: Session = Depends(get_db)):
+    """
+    Retrieves the chronological history of room transfer requests for a student.
+    """
     account = db.query(Account).filter(Account.email == email).first()
     student = db.query(StudentProfile).filter(StudentProfile.account_id == account.id).first()
     
@@ -144,6 +161,9 @@ def get_student_exchanges(email: str, db: Session = Depends(get_db)):
 
 @router.post("/exchange-request")
 def submit_room_exchange(data: dict, db: Session = Depends(get_db)):
+    """
+    Initiates a workflow request for a room transfer.
+    """
     account = db.query(Account).filter(Account.email == data['email']).first()
     student = db.query(StudentProfile).filter(StudentProfile.account_id == account.id).first()
     
@@ -169,6 +189,10 @@ def submit_room_exchange(data: dict, db: Session = Depends(get_db)):
 
 @router.get("/payments/{email}")
 def get_student_payments(email: str, db: Session = Depends(get_db)):
+    """
+    Compiles the student's personal financial ledger.
+    Calculates total outstanding debts and breaks them down by fee categories (Rent, Mess, Electricity).
+    """
     account = db.query(Account).filter(Account.email == email).first()
     student = db.query(StudentProfile).filter(StudentProfile.account_id == account.id).first()
     
@@ -199,26 +223,30 @@ def get_student_payments(email: str, db: Session = Depends(get_db)):
         "history": history
     }
 
-# --- UPDATED ROUTE: Actually accepts file uploads! ---
 @router.post("/pay-bill/{fee_id}")
 async def pay_bill(fee_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Handles secure multipart/form-data file uploads for payment verification.
+    Generates a unique hashed filename to prevent collisions and saves the image to a static directory.
+    Updates the ledger record to reflect a pending review status.
+    """
     fee = db.query(FeeRecord).filter(FeeRecord.id == fee_id).first()
     if not fee:
         raise HTTPException(status_code=404, detail="Fee record not found")
     
-    # Ensure the uploads directory exists
+    # Ensure the static serving directory exists
     os.makedirs("uploads", exist_ok=True)
     
-    # Create a unique filename so files don't overwrite each other
+    # Generate a collision-resistant filename using UUIDs
     file_extension = file.filename.split(".")[-1]
     unique_filename = f"receipt_{fee_id}_{uuid.uuid4().hex[:8]}.{file_extension}"
     file_path = os.path.join("uploads", unique_filename)
     
-    # Save the file securely to the uploads folder
+    # Securely stream the uploaded file to disk
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    # Save the static URL to the database
+    # Persist the static asset URL to the PostgreSQL ledger
     fee.receipt_image_url = f"/uploads/{unique_filename}" 
     fee.status = "Under Review" 
     db.commit()

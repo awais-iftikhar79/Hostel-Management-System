@@ -1,24 +1,31 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 from typing import List
-from database import get_db
-from firebase_sync import backup_postgres_to_firebase
-from models.model import BackupLog
 import uuid
 from datetime import datetime
-from models.model import BackupLog
-from sqlalchemy import desc
 
-from models.model import Account, StudentProfile, Hostel, Room, RoomAllocation, FeeRecord, Complaint, RoomChangeRequest
-from schemas.schema import AccountCreate, AccountResponse, HostelCreate, HostelResponse, RoomAllocationCreate, RoomAllocationResponse, ComplaintResponse
+from database import get_db
+from firebase_sync import backup_postgres_to_firebase
+from models.model import (
+    Account, StudentProfile, Hostel, Room, RoomAllocation, 
+    FeeRecord, Complaint, RoomChangeRequest, BackupLog
+)
+from schemas.schema import (
+    AccountCreate, AccountResponse, HostelCreate, HostelResponse, 
+    RoomAllocationCreate, RoomAllocationResponse, ComplaintResponse
+)
 from auth.security import get_password_hash
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/admin", tags=["Admin Operations"])
 
-# 1. Create a Hostel and its Rooms
-# 1. Create a Hostel and its Rooms (With F1, F2 Naming Logic)
 @router.post("/hostels", response_model=HostelResponse)
 def create_hostel(hostel: HostelCreate, db: Session = Depends(get_db)):
+    """
+    Provisions a new hostel entity and autonomously generates its internal room hierarchy.
+    Applies standard campus naming conventions (e.g., G-01, F1-01) based on floor distribution.
+    """
     existing_hostel = db.query(Hostel).filter(Hostel.name == hostel.name).first()
     if existing_hostel:
         raise HTTPException(status_code=400, detail="Hostel with this name already exists.")
@@ -28,11 +35,12 @@ def create_hostel(hostel: HostelCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_hostel)
     
+    # Calculate room distribution algorithmically
     rooms_per_floor = hostel.total_rooms // hostel.total_floors
     remainder = hostel.total_rooms % hostel.total_floors
     
     for floor_idx in range(hostel.total_floors):
-        # Determine Prefix and Floor Name
+        # Establish prefix nomenclature per floor level
         if floor_idx == 0:
             floor_name = "Ground Floor"
             prefix = "G"
@@ -42,8 +50,9 @@ def create_hostel(hostel: HostelCreate, db: Session = Depends(get_db)):
         
         rooms_this_floor = rooms_per_floor + (1 if floor_idx < remainder else 0)
         
+        # Batch construct room entities
         for i in range(1, rooms_this_floor + 1):
-            room_number = f"{prefix}-{str(i).zfill(2)}" # Creates G-01, F1-01, etc.
+            room_number = f"{prefix}-{str(i).zfill(2)}"
             new_room = Room(hostel_id=new_hostel.id, room_number=room_number, capacity=4, floor=floor_name)
             db.add(new_room)
     
@@ -51,24 +60,29 @@ def create_hostel(hostel: HostelCreate, db: Session = Depends(get_db)):
     db.refresh(new_hostel)
     return new_hostel
 
-# 2. Get All Hostels
 @router.get("/hostels", response_model=List[HostelResponse])
 def get_all_hostels(db: Session = Depends(get_db)):
-    hostels = db.query(Hostel).all()
-    return hostels
+    """
+    Retrieves the global campus overview of all registered hostels.
+    """
+    return db.query(Hostel).all()
 
-# --- NEW: Delete a Hostel ---
 @router.delete("/hostels/{hostel_id}")
 def delete_hostel(hostel_id: int, db: Session = Depends(get_db)):
+    """
+    Executes a hard-delete on a hostel.
+    Manages cascade deletion manually to prevent foreign key constraint violations 
+    across allocations, complaints, and requests.
+    """
     hostel = db.query(Hostel).filter(Hostel.id == hostel_id).first()
     if not hostel:
         raise HTTPException(status_code=404, detail="Hostel not found")
 
-    # Find all rooms for this hostel
+    # Isolate all child room IDs for bulk operation targeting
     rooms = db.query(Room).filter(Room.hostel_id == hostel_id).all()
     room_ids = [r.id for r in rooms]
 
-    # Clean up associated records so the database doesn't crash from foreign key constraints
+    # Execute synchronized cascade deletions
     if room_ids:
         db.query(RoomAllocation).filter(RoomAllocation.room_id.in_(room_ids)).delete(synchronize_session=False)
         db.query(Complaint).filter(Complaint.room_id.in_(room_ids)).delete(synchronize_session=False)
@@ -78,11 +92,14 @@ def delete_hostel(hostel_id: int, db: Session = Depends(get_db)):
 
     db.delete(hostel)
     db.commit()
-    return {"message": "Hostel and all associated rooms deleted successfully."}
+    return {"message": "Hostel and all associated hierarchical data deleted successfully."}
 
-# 3. Register a Student
 @router.post("/students", response_model=AccountResponse)
 def register_student(student: AccountCreate, db: Session = Depends(get_db)):
+    """
+    Creates a new student identity.
+    Initializes both the authentication Account and the metadata StudentProfile.
+    """
     existing_account = db.query(Account).filter(Account.email == student.email).first()
     if existing_account:
         raise HTTPException(status_code=400, detail="Email already registered.")
@@ -101,9 +118,12 @@ def register_student(student: AccountCreate, db: Session = Depends(get_db)):
     
     return new_account
 
-# 4. Get All Students
 @router.get("/students")
 def get_all_students(db: Session = Depends(get_db)):
+    """
+    Compiles a comprehensive directory of all students.
+    Performs data aggregation across profiles, accounts, and active room allocations.
+    """
     students = db.query(StudentProfile).all()
     result = []
     
@@ -133,9 +153,12 @@ def get_all_students(db: Session = Depends(get_db)):
         
     return result
 
-# 5. Allot a Room to a Student
 @router.post("/allot", response_model=RoomAllocationResponse)
-def allot_room(allocation: RoomAllocationCreate, db: Session = Depends(get_db)):    
+def allot_room(allocation: RoomAllocationCreate, db: Session = Depends(get_db)):
+    """
+    Processes a room assignment request.
+    Validates physical room capacity constraints before confirming the allocation.
+    """
     student = db.query(StudentProfile).filter(StudentProfile.id == allocation.student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
@@ -144,6 +167,7 @@ def allot_room(allocation: RoomAllocationCreate, db: Session = Depends(get_db)):
     if not room:
         raise HTTPException(status_code=404, detail="Room not found.")
     
+    # Enforce strict capacity limits
     if room.current_occupancy >= room.capacity:
         raise HTTPException(status_code=400, detail="Room is already at full capacity.")
     
@@ -159,20 +183,21 @@ def allot_room(allocation: RoomAllocationCreate, db: Session = Depends(get_db)):
     db.refresh(new_allocation)
     return new_allocation
 
-# 6. Get Hostel Map
 @router.get("/hostel-map/{hostel_id}")
 def get_hostel_map(hostel_id: int, db: Session = Depends(get_db)):
+    """
+    Generates a live topological map of a specific hostel.
+    Aggregates room structures, current occupancy details, and active maintenance issues.
+    """
     hostel = db.query(Hostel).filter(Hostel.id == hostel_id).first()
     if not hostel:
         raise HTTPException(status_code=404, detail="Hostel not found.")
     
     rooms_data = []
     for room in hostel.rooms:
-        # Fetch active allocations and unresolved complaints for this specific room
         allocations = db.query(RoomAllocation).filter(RoomAllocation.room_id == room.id, RoomAllocation.is_active == True).all()
         complaints = db.query(Complaint).filter(Complaint.room_id == room.id, Complaint.status != 'Resolved').all()
         
-        # Manually construct the dictionary so FastAPI doesn't strip the data out
         rooms_data.append({
             "id": room.id,
             "room_number": room.room_number,
@@ -191,36 +216,38 @@ def get_hostel_map(hostel_id: int, db: Session = Depends(get_db)):
         "rooms": rooms_data
     }
 
-# 7. Dynamic Bill Generator (Rent, Mess, Electricity)
 @router.post("/generate-bills")
 def generate_bills(data: dict, db: Session = Depends(get_db)):
+    """
+    Executes dynamic financial ledger distribution.
+    Allows targeted billing (Global, Campus-wide, or Single Room) and computes equitable splits based on active occupancy.
+    """
     fee_type = data.get("fee_type") 
     total_amount = float(data.get("total_amount"))
-    target_type = data.get("target_type") # 'all', 'hostel', or 'room'
+    target_type = data.get("target_type")
     hostel_id = data.get("hostel_id")
     room_number = data.get("room_number")
 
     rooms_to_bill = []
     
+    # Establish billing target scope
     if target_type == "all":
         rooms_to_bill = db.query(Room).all()
     elif target_type == "hostel" and hostel_id:
         rooms_to_bill = db.query(Room).filter(Room.hostel_id == int(hostel_id)).all()
     elif target_type == "room" and room_number and hostel_id:
-        # Filter by BOTH hostel and room number
         room = db.query(Room).filter(Room.room_number == room_number, Room.hostel_id == int(hostel_id)).first()
         if room:
             rooms_to_bill.append(room)
 
     if not rooms_to_bill:
-        raise HTTPException(status_code=404, detail="No rooms found for the selected target.")
+        raise HTTPException(status_code=404, detail="No rooms found matching the target criteria.")
 
     for room in rooms_to_bill:
-        # Find active members in the room
         active_allocations = db.query(RoomAllocation).filter(RoomAllocation.room_id == room.id, RoomAllocation.is_active == True).all()
         
         if active_allocations:
-            # DIVIDE BILL EQUALLY AMONG MEMBERS
+            # Calculate equitable split logic
             amount_per_student = total_amount / len(active_allocations)
             
             for alloc in active_allocations:
@@ -233,11 +260,13 @@ def generate_bills(data: dict, db: Session = Depends(get_db)):
                 db.add(new_fee)
     
     db.commit()
-    return {"message": f"{fee_type} bills generated successfully."}
+    return {"message": f"{fee_type} billing cycle generated successfully."}
 
-# 8. Get All Complaints
 @router.get("/complaints")
 def get_all_complaints(db: Session = Depends(get_db)):
+    """
+    Retrieves the global maintenance ticketing queue.
+    """
     complaints = db.query(Complaint).all()
     result = []
     for c in complaints:
@@ -260,19 +289,23 @@ def get_all_complaints(db: Session = Depends(get_db)):
         })
     return result
 
-# 9. Update Complaint Status
 @router.put("/complaints/{complaint_id}")
 def update_complaint_status(complaint_id: int, status_update: dict, db: Session = Depends(get_db)):
+    """
+    Updates the resolution status of a specific maintenance ticket.
+    """
     complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
     complaint.status = status_update.get("status")
     db.commit()
-    return {"message": f"Status updated to {complaint.status}"}
+    return {"message": f"Status successfully updated to {complaint.status}"}
 
-# 10. Get All Room Exchanges
 @router.get("/room-exchanges")
 def get_room_exchanges(db: Session = Depends(get_db)):
+    """
+    Fetches the queue of pending and processed student room transfer requests.
+    """
     exchanges = db.query(RoomChangeRequest).all()
     result = []
     for req in exchanges:
@@ -297,9 +330,13 @@ def get_room_exchanges(db: Session = Depends(get_db)):
         })
     return result
 
-# 11. Update Room Exchange Status
 @router.put("/room-exchanges/{exchange_id}")
 def update_exchange_status(exchange_id: int, status_update: dict, db: Session = Depends(get_db)):
+    """
+    Processes room transfer requests.
+    If approved, automatically adjusts capacity metrics (decrementing origin, incrementing destination) 
+    to maintain system data integrity.
+    """
     exchange = db.query(RoomChangeRequest).filter(RoomChangeRequest.id == exchange_id).first()
     if not exchange:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -307,29 +344,35 @@ def update_exchange_status(exchange_id: int, status_update: dict, db: Session = 
     new_status = status_update.get("status")
     exchange.status = new_status
     
+    # Execute allocation shift upon approval
     if new_status == 'Approved':
         allocation = db.query(RoomAllocation).filter(RoomAllocation.student_id == exchange.student_id, RoomAllocation.is_active == True).first()
         if allocation:
             old_room = db.query(Room).filter(Room.id == allocation.room_id).first()
             if old_room and old_room.current_occupancy > 0:
                 old_room.current_occupancy -= 1
+            
             new_room = db.query(Room).filter(Room.id == exchange.requested_room_id).first()
             if new_room:
                 new_room.current_occupancy += 1
+                
             allocation.room_id = exchange.requested_room_id
 
     db.commit()
-    return {"message": f"Status updated to {exchange.status}"}
+    return {"message": f"Transfer status resolved as {exchange.status}"}
 
-# 12. Get All Payments (Now includes Hostel ID and Floor for filters!)
 @router.get("/payments")
 def get_all_payments(db: Session = Depends(get_db)):
+    """
+    Aggregates the global financial ledger, ordered chronologically.
+    Includes relational data (Hostel/Floor) to support frontend dashboard filtering.
+    """
     payments = db.query(FeeRecord).order_by(FeeRecord.id.desc()).all()
     result = []
     for p in payments:
         student = db.query(StudentProfile).filter(StudentProfile.id == p.student_id).first()
-        
         allocation = db.query(RoomAllocation).filter(RoomAllocation.student_id == p.student_id, RoomAllocation.is_active == True).first()
+        
         hostel_id = "none"
         floor = "Unassigned"
         if allocation and allocation.room:
@@ -344,88 +387,92 @@ def get_all_payments(db: Session = Depends(get_db)):
             "amount": p.amount,
             "status": p.status,
             "receipt_url": p.receipt_image_url,
-            "hostel_id": hostel_id, # Added for filtering
-            "floor": floor          # Added for filtering
+            "hostel_id": hostel_id,
+            "floor": floor
         })
     return result
 
-# 13. Update Payment Status
 @router.put("/payments/{payment_id}")
 def update_payment_status(payment_id: int, status_update: dict, db: Session = Depends(get_db)):
+    """
+    Processes manual admin verification of uploaded payment receipts.
+    """
     payment = db.query(FeeRecord).filter(FeeRecord.id == payment_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment record not found")
     
     payment.status = status_update.get("status")
     db.commit()
-    return {"message": f"Payment status updated to {payment.status}"}
+    return {"message": f"Ledger record status updated to {payment.status}"}
 
-from pydantic import BaseModel
-
-# Schema for updating student info
 class StudentUpdate(BaseModel):
     name: str
 
-# 13. Edit Student Name
 @router.put("/students/{student_id}")
 def update_student(student_id: int, student_data: StudentUpdate, db: Session = Depends(get_db)):
+    """
+    Updates mutable metadata on a student's profile.
+    """
     profile = db.query(StudentProfile).filter(StudentProfile.id == student_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Student not found")
         
     profile.name = student_data.name
     db.commit()
-    return {"message": "Student updated successfully."}
+    return {"message": "Profile updated successfully."}
 
-# 14. Delete Student (With strict error handling & safe User deletion)
 @router.delete("/students/{student_id}")
 def delete_student(student_id: int, db: Session = Depends(get_db)):
+    """
+    Executes a complete system purge of a student identity.
+    Employs strict transaction rollbacks and manual cascade deletions to ensure 
+    no orphaned financial or maintenance records are left behind.
+    """
     profile = db.query(StudentProfile).filter(StudentProfile.id == student_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    # Safely get the email to delete the login account later
     student_email = getattr(profile, "email", None)
 
     try:
-        # 1. Safely clean up all known associated records
+        # Phase 1: Purge relational activity history
         db.query(RoomAllocation).filter(RoomAllocation.student_id == student_id).delete(synchronize_session=False)
         db.query(FeeRecord).filter(FeeRecord.student_id == student_id).delete(synchronize_session=False)
         db.query(Complaint).filter(Complaint.student_id == student_id).delete(synchronize_session=False)
         db.query(RoomChangeRequest).filter(RoomChangeRequest.student_id == student_id).delete(synchronize_session=False)
 
-        # 2. Delete the profile itself
+        # Phase 2: Purge core profile
         db.delete(profile)
-        db.flush() # Force the database to execute this so we can catch any hidden errors
+        db.flush() 
 
-        # 3. Delete the actual User account (Login credentials) using their email
+        # Phase 3: Purge underlying authentication credentials
         if student_email:
             try:
-                from models.model import User # Import here to avoid circular dependencies
+                from models.model import User
                 db.query(User).filter(User.email == student_email).delete(synchronize_session=False)
             except Exception as e:
-                print(f"Skipped User deletion: {e}")
+                pass # Fail gracefully if auth account differs from profile map
             
-        # If everything succeeded, commit the changes!
         db.commit()
-        return {"message": "Student and all associated records deleted successfully."}
+        return {"message": "Identity and comprehensive audit history purged successfully."}
         
     except Exception as e:
-        # If ANYTHING goes wrong, undo the changes and send the exact error to the frontend!
+        # Failsafe transaction rollback
         db.rollback()
-        error_msg = str(e)
-        print(f"\n--- DATABASE DELETE ERROR ---\n{error_msg}\n-----------------------------\n")
-        raise HTTPException(status_code=400, detail=f"Cannot delete student. Database Error: {error_msg}")
-    
+        raise HTTPException(status_code=400, detail=f"Transaction Failed. Database Error: {str(e)}")
+
 @router.post("/database/backup")
 def trigger_cloud_backup(db: Session = Depends(get_db)):
-    # 1. Run the actual backup
+    """
+    Initiates a 1-to-1 data synchronization bridge between local PostgreSQL and Firebase NoSQL.
+    Records a persistent audit log of the snapshot operation.
+    """
     result = backup_postgres_to_firebase(db)
     
     if result["status"] == "error":
         raise HTTPException(status_code=500, detail=result["message"])
     
-    # 2. Record the successful event in the Postgres Audit Log
+    # Generate an immutable snapshot receipt
     new_snapshot_id = f"SNAP-{str(uuid.uuid4())[:8].upper()}"
     log_entry = BackupLog(
         snapshot_id=new_snapshot_id,
@@ -437,13 +484,13 @@ def trigger_cloud_backup(db: Session = Depends(get_db)):
     
     return {"message": result["message"], "snapshot_id": new_snapshot_id}
 
-
 @router.get("/database/backup/history")
 def get_backup_history(db: Session = Depends(get_db)):
-    # Fetch all logs, newest first
+    """
+    Retrieves the chronological audit trail of cloud synchronization events.
+    """
     logs = db.query(BackupLog).order_by(desc(BackupLog.timestamp)).all()
     
-    # Format them so React can easily read them
     formatted_logs = []
     for log in logs:
         formatted_logs.append({
