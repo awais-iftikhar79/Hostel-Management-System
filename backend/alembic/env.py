@@ -16,7 +16,6 @@ from models.model import (
     FeeRecord, 
     Complaint, 
     RoomChangeRequest,
-    BackupLog 
 )
 
 # Initialize Alembic configuration object

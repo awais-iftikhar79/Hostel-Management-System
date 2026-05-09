@@ -6,10 +6,10 @@ import uuid
 from datetime import datetime
 
 from database import get_db
-from firebase_sync import backup_postgres_to_firebase
+from firebase_sync import backup_postgres_to_firebase, restore_firebase_to_postgres
 from models.model import (
     Account, StudentProfile, Hostel, Room, RoomAllocation, 
-    FeeRecord, Complaint, RoomChangeRequest, BackupLog
+    FeeRecord, Complaint, RoomChangeRequest
 )
 from schemas.schema import (
     AccountCreate, AccountResponse, HostelCreate, HostelResponse, 
@@ -442,13 +442,13 @@ def delete_student(student_id: int, db: Session = Depends(get_db)):
     """
     Executes a complete system purge of a student identity.
     Employs strict transaction rollbacks and manual cascade deletions to ensure 
-    no orphaned financial or maintenance records are left behind.
+    no orphaned financial, maintenance, or auth records are left behind.
     """
     profile = db.query(StudentProfile).filter(StudentProfile.id == student_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    student_email = getattr(profile, "email", None)
+    target_account_id = profile.account_id
 
     try:
         # Phase 1: Purge relational activity history
@@ -462,12 +462,7 @@ def delete_student(student_id: int, db: Session = Depends(get_db)):
         db.flush() 
 
         # Phase 3: Purge underlying authentication credentials
-        if student_email:
-            try:
-                from models.model import User
-                db.query(User).filter(User.email == student_email).delete(synchronize_session=False)
-            except Exception as e:
-                pass # Fail gracefully if auth account differs from profile map
+        db.query(Account).filter(Account.id == target_account_id).delete(synchronize_session=False)
             
         db.commit()
         return {"message": "Identity and comprehensive audit history purged successfully."}
@@ -481,39 +476,28 @@ def delete_student(student_id: int, db: Session = Depends(get_db)):
 def trigger_cloud_backup(db: Session = Depends(get_db)):
     """
     Initiates a 1-to-1 data synchronization bridge between local PostgreSQL and Firebase NoSQL.
-    Records a persistent audit log of the snapshot operation.
     """
     result = backup_postgres_to_firebase(db)
     
     if result["status"] == "error":
         raise HTTPException(status_code=500, detail=result["message"])
     
-    # Generate an immutable snapshot receipt
-    new_snapshot_id = f"SNAP-{str(uuid.uuid4())[:8].upper()}"
-    log_entry = BackupLog(
-        snapshot_id=new_snapshot_id,
-        trigger_type="Manual Admin Action",
-        status="Verified"
-    )
-    db.add(log_entry)
-    db.commit()
-    
-    return {"message": result["message"], "snapshot_id": new_snapshot_id}
+    return {"message": result["message"]}
 
-@router.get("/database/backup/history")
-def get_backup_history(db: Session = Depends(get_db)):
+@router.post("/database/restore")
+def trigger_database_restore(db: Session = Depends(get_db)):
     """
-    Retrieves the chronological audit trail of cloud synchronization events.
+    DISASTER RECOVERY: Triggers a pull from Firebase to repopulate the local database.
+    This endpoint connects the frontend 'Restore' button to the cloud recovery logic.
     """
-    logs = db.query(BackupLog).order_by(desc(BackupLog.timestamp)).all()
+    # Execute the recovery logic from firebase_sync
+    result = restore_firebase_to_postgres(db)
     
-    formatted_logs = []
-    for log in logs:
-        formatted_logs.append({
-            "id": log.snapshot_id,
-            "date": log.timestamp.strftime("%B %d, %Y"),
-            "time": log.timestamp.strftime("%I:%M %p"),
-            "type": log.trigger_type,
-            "status": log.status
-        })
-    return formatted_logs
+    # If the logic returns an error status, raise a 500 exception for the frontend
+    if result["status"] == "error":
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Cloud Recovery Failed: {result['message']}"
+        )
+    
+    return {"message": "Success: Local PostgreSQL has been synchronized with the latest cloud snapshot."}

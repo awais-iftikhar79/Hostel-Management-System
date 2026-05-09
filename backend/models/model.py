@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime,Text
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -141,15 +141,3 @@ class RoomChangeRequest(Base):
     student = relationship("StudentProfile", back_populates="room_change_requests")
     current_room = relationship("Room", foreign_keys=[current_room_id], back_populates="current_room_requests")
     requested_room = relationship("Room", foreign_keys=[requested_room_id], back_populates="requested_room_requests")
-    
-class BackupLog(Base):
-    """
-    Immutable audit trail logging cloud synchronization events with Firebase.
-    """
-    __tablename__ = 'backup_logs'
-    
-    id = Column(Integer, primary_key=True, index=True)
-    snapshot_id = Column(String, unique=True, index=True)
-    timestamp = Column(DateTime, default=datetime.now)
-    trigger_type = Column(String) 
-    status = Column(String)

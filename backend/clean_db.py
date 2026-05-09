@@ -8,8 +8,7 @@ from models.model import (
     Complaint, 
     RoomChangeRequest, 
     Room, 
-    Hostel,
-    BackupLog
+    Hostel
 )
 
 def reset_database():
@@ -28,7 +27,6 @@ def reset_database():
         db.query(FeeRecord).delete(synchronize_session=False)
         db.query(Complaint).delete(synchronize_session=False)
         db.query(RoomChangeRequest).delete(synchronize_session=False)
-        db.query(BackupLog).delete(synchronize_session=False)
 
         # Phase 2: Purge physical campus infrastructure
         print("INFO: Deconstructing physical campus topology (Rooms & Hostels)...")
@@ -56,7 +54,7 @@ def reset_database():
         db.close()
 
 if __name__ == "__main__":
-    # Enterprise-grade CLI warning block
+    # Professional CLI warning block
     print("\n" + "="*55)
     print(" 🚨 WARNING: CRITICAL SYSTEM OPERATION 🚨")
     print("="*55)
@@ -64,10 +62,9 @@ if __name__ == "__main__":
     print("  - Student Profiles, Assignments, and Accounts")
     print("  - Financial Ledgers and Payment History")
     print("  - Campus Infrastructure (Hostels & Rooms)")
-    print("  - Cloud Synchronization Audit Logs")
     print("="*55)
     
-    confirm = input("To proceed with the purge, type 'y': ")
+    confirm = input("To proceed with the database purge, type 'y': ")
     
     if confirm == 'y':
         reset_database()
