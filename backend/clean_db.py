@@ -67,9 +67,9 @@ if __name__ == "__main__":
     print("  - Cloud Synchronization Audit Logs")
     print("="*55)
     
-    confirm = input("To proceed with the purge, type 'CONFIRM_PURGE': ")
+    confirm = input("To proceed with the purge, type 'y': ")
     
-    if confirm == 'CONFIRM_PURGE':
+    if confirm == 'y':
         reset_database()
     else:
         print("ABORTED: Operation cancelled. No data was modified.")

@@ -96,27 +96,43 @@ def delete_hostel(hostel_id: int, db: Session = Depends(get_db)):
 
 @router.post("/students", response_model=AccountResponse)
 def register_student(student: AccountCreate, db: Session = Depends(get_db)):
-    """
-    Creates a new student identity.
-    Initializes both the authentication Account and the metadata StudentProfile.
-    """
+    # 1. Check if email already exists
     existing_account = db.query(Account).filter(Account.email == student.email).first()
     if existing_account:
         raise HTTPException(status_code=400, detail="Email already registered.")
     
     hashed_password = get_password_hash(student.password)
     
-    new_account = Account(email=student.email, password_hash=hashed_password, role="student")
-    db.add(new_account)
-    db.commit()
-    db.refresh(new_account)
-    
-    name = student.email.split("@")[0]
-    student_profile = StudentProfile(account_id=new_account.id, name=name)
-    db.add(student_profile)
-    db.commit()
-    
-    return new_account
+    try:
+        # 2. Create the Login Account
+        new_account = Account(
+            email=student.email, 
+            password_hash=hashed_password, 
+            role="student"
+        )
+        db.add(new_account)
+        
+        # We 'flush' to get the new_account.id without finishing the transaction yet
+        db.flush() 
+        
+        # 3. Create the Student Profile (Linking to the account we just made)
+        full_name = f"{student.first_name} {student.last_name}"
+        new_profile = StudentProfile(
+            account_id=new_account.id, 
+            name=full_name,
+            phone=None # Can be updated later
+        )
+        db.add(new_profile)
+        
+        # 4. Commit both at once
+        db.commit()
+        db.refresh(new_account)
+        
+        return new_account
+
+    except Exception as e:
+        db.rollback() # If anything fails, undo everything!
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @router.get("/students")
 def get_all_students(db: Session = Depends(get_db)):

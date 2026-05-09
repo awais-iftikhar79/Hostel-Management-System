@@ -18,6 +18,8 @@ class AccountLogin(BaseModel):
     
 class AccountCreate(BaseModel):
     """Validates payload for registering new identities via the Admin portal."""
+    first_name: str
+    last_name: str
     email: EmailStr
     password: str
     role: str

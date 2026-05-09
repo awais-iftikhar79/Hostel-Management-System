@@ -37,6 +37,8 @@ export default function RegisterStudent() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
           email: email,
           password: password,
           role: 'student'
