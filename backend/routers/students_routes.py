@@ -5,6 +5,7 @@ from models.model import Account, StudentProfile, RoomAllocation, Room, Hostel, 
 import shutil
 import os
 import uuid
+import base64
 
 router = APIRouter(prefix="/student", tags=["Student Operations"])
 
@@ -226,29 +227,31 @@ def get_student_payments(email: str, db: Session = Depends(get_db)):
 @router.post("/pay-bill/{fee_id}")
 async def pay_bill(fee_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
-    Handles secure multipart/form-data file uploads for payment verification.
-    Generates a unique hashed filename to prevent collisions and saves the image to a static directory.
-    Updates the ledger record to reflect a pending review status.
+    Reads the uploaded image, encodes it securely into a Base64 string, 
+    and stores the raw image data directly inside the PostgreSQL database 
+    as per academic requirements.
     """
     fee = db.query(FeeRecord).filter(FeeRecord.id == fee_id).first()
     if not fee:
         raise HTTPException(status_code=404, detail="Fee record not found")
     
-    # Ensure the static serving directory exists
-    os.makedirs("uploads", exist_ok=True)
-    
-    # Generate a collision-resistant filename using UUIDs
-    file_extension = file.filename.split(".")[-1]
-    unique_filename = f"receipt_{fee_id}_{uuid.uuid4().hex[:8]}.{file_extension}"
-    file_path = os.path.join("uploads", unique_filename)
-    
-    # Securely stream the uploaded file to disk
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    # Persist the static asset URL to the PostgreSQL ledger
-    fee.receipt_image_url = f"/uploads/{unique_filename}" 
-    fee.status = "Under Review" 
-    db.commit()
-    
-    return {"message": "Payment receipt uploaded for verification!", "url": fee.receipt_image_url}
+    try:
+        # 1. Read the raw binary bytes of the image
+        file_bytes = await file.read()
+        
+        # 2. Convert the binary into a Base64 text string
+        encoded_string = base64.b64encode(file_bytes).decode('utf-8')
+        
+        # 3. Format it so HTML/React can read it natively
+        mime_type = file.content_type or "image/jpeg"
+        base64_image_data = f"data:{mime_type};base64,{encoded_string}"
+        
+        # 4. Save the massive text string directly into PostgreSQL
+        fee.receipt_image_url = base64_image_data 
+        fee.status = "Under Review" 
+        db.commit()
+        
+        return {"message": "Image saved directly to database successfully!"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process image: {str(e)}")

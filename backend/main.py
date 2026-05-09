@@ -24,9 +24,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Provision static file serving for user-uploaded assets (e.g., payment receipts)
-os.makedirs("uploads", exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Register modular API routers to the main application tree
 app.include_router(auth_router.router)

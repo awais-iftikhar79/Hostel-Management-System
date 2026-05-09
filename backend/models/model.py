@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime,Text
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -101,7 +101,7 @@ class FeeRecord(Base):
     amount = Column(Integer, nullable=False)
     fee_type = Column(String, nullable=False)
     status = Column(String, nullable=False)
-    receipt_image_url = Column(String, nullable=True)
+    receipt_image_url = Column(Text, nullable=True)
     
     # Relationships
     student = relationship("StudentProfile", back_populates="fees")
